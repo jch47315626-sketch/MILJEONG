@@ -18,8 +18,13 @@ const PADDING_CATCH_CHANCE := 0.6
 const INSPECT_RELEASE_MIN := 10 # 점검 후 출고
 const INSPECT_RETURN_MIN := 15 # 꼼꼼한 반납 점검
 const SERVICE_MIN := 30 # 정기 정비
-const VISITOR_PATIENCE := 60 # 창구 손님이 기다려 주는 시간
-const CALL_WAIT := 90 # 고장 전화 후 출장을 기다려 주는 시간
+const VISITOR_PATIENCE := 60 # 손님이 한 자리에서 기다려 주는 시간
+const CALL_WAIT := 90 # 고장 전화를 받은 뒤 출장을 기다려 주는 시간
+const RING_MIN := 12 # 전화벨이 울리는 시간. 그 안에 전화기까지 가서 받아야 한다
+const ACCEPT_MIN := 3 # 창구 대여 접수
+const COFFEE_MIN := 10
+const COFFEE_PER_DAY := 3
+const LEADER_NAG_MIN := 30 # 팀장이 부른 뒤 이 시간이 지나도록 안 가면 관계가 깎인다
 
 # ── 확률 (게임 시간 1분마다) ──
 const RESERVATION_REQUEST_CHANCE := 1.0 / 70.0
@@ -222,3 +227,109 @@ const TRIGGER_EVENTS := {
 		],
 	},
 }
+
+
+# ───────────────────────── 지도 ─────────────────────────
+# 한 칸 = TILE 픽셀. 글자마다 칸 종류가 다르다.
+#  t 나무  , 풀밭  # 벽  . 사무실 바닥  D 문  w 창고 바닥  : 마당(자갈)  = 아스팔트  f 울타리  ~ 논밭
+#  B 서류함  L 팀장 책상  P 컴퓨터  M 내 자리  T 전화기  C 창구  S 안내판  K 트럭  H 농가 대문
+const TILE := 48
+const WALKABLE := ",.D:w=~"
+
+const OFFICE_MAP := [
+	"tttttttttttttttttttttttttttttttttttt",
+	"t,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,t",
+	"t,############,,,,,##############,,t",
+	"t,#BB......BB#,,,,,#wwwwwwwwwwww#,,t",
+	"t,#.....L....#,,,,,#wwwwwwwwwwww#,,t",
+	"t,#P.M....T..#,,,,,#wwwwwwwwwwww#,,t",
+	"t,#..........#,,,,,#wwwwwwwwwwww#,,t",
+	"t,#CCC.CCCCCC#,,,,,#wwwwwwwwwwww#,,t",
+	"t,#..........#,,,,,#wwwwwwwwwwww#,,t",
+	"t,#..........#,,,,,#wwwwwwwwwwww#,,t",
+	"t,#####DD#####,,,,,######DD######,,t",
+	"t,,,,::::::::::::::::::::::::::,,,,t",
+	"t,,,,::::::::::::::::::::::::::,,,,t",
+	"t,,S,::::::::::::::::::::::::::,,,,t",
+	"t,,,,::::::::::::::::::::::::::,,,,t",
+	"t,,,,::::::::::::::::::::::::::,,,,t",
+	"t,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,t",
+	"t,,,===========,,,,,,,,,,,,,,,,,,,,t",
+	"t,,,==KK=======,,,,,,,,,,,,,,,,,,,,t",
+	"t,,,===========,,,,,,,,,,,,,,,,,,,,t",
+	"tffffff=====ffffffffffffffffffffffft",
+	"t==================================t",
+]
+
+const OFFICE_SPAWN := Vector2i(7, 9) # 출근하면 서는 곳 (사무실 문 안쪽)
+const TRUCK_SIDE := Vector2i(8, 18) # 트럭에서 내리는 곳
+const LEADER_POS := Vector2i(8, 3) # 팀장 자리 (책상 L 뒤)
+
+# 창구 앞에 줄 서는 자리 (앞사람부터)
+const COUNTER_QUEUE := [
+	Vector2i(9, 8), Vector2i(10, 8), Vector2i(11, 8), Vector2i(12, 8),
+	Vector2i(9, 9), Vector2i(10, 9), Vector2i(11, 9), Vector2i(12, 9),
+]
+# 접수를 마치고 마당에서 장비를 기다리는 자리 (창고 문 앞)
+const PICKUP_SPOTS := [
+	Vector2i(22, 12), Vector2i(23, 12), Vector2i(24, 12),
+	Vector2i(27, 12), Vector2i(28, 12), Vector2i(29, 12),
+]
+# 반납하러 온 농민과 장비가 서는 자리
+const RETURN_SPOTS := [
+	{"machine": Vector2i(9, 14), "farmer": Vector2i(9, 15)},
+	{"machine": Vector2i(12, 14), "farmer": Vector2i(12, 15)},
+	{"machine": Vector2i(15, 14), "farmer": Vector2i(15, 15)},
+	{"machine": Vector2i(18, 14), "farmer": Vector2i(18, 15)},
+]
+# 창고 안 장비 자리
+const MACHINE_SLOTS := [
+	Vector2i(21, 4), Vector2i(24, 4), Vector2i(27, 4), Vector2i(30, 4),
+	Vector2i(21, 7), Vector2i(24, 7), Vector2i(27, 7), Vector2i(30, 7),
+	Vector2i(21, 9), Vector2i(30, 9),
+]
+
+const VILLAGE_MAP := [
+	"tttttttttttttttttttttttttt",
+	"t,,,,,,,,,,,,,,,,,,,,,,,,t",
+	"t,~~~~~~~~~,,,,~~~~~~~~~,t",
+	"t,~~~~~~~~~,,,,~~~~~~~~~,t",
+	"t,~~~~~~~~~,,,,~~~~~~~~~,t",
+	"t,~~~~~~~~~,,,,~~~~~~~~~,t",
+	"t,~~~~~~~~~,,,,~~~~~~~~~,t",
+	"t,,,,,,,,,,,,,,,,,,,,,,,,t",
+	"t,,###,,,,,,,,,,,,,,,,,,,t",
+	"t,,#H#,,S,,,,,,,,,,,,,,,,t",
+	"t,,,,,,,,,,,,,,,,,,,,,,,,t",
+	"t========================t",
+	"t==KK====================t",
+	"t========================t",
+	"t,,,,,,,,,,,,,,,,,,,,,,,,t",
+	"tttttttttttttttttttttttttt",
+]
+const VILLAGE_SPAWN := Vector2i(5, 12)
+# 고장 난 기계와 농민이 기다리는 자리 (마을마다 하나가 정해진다)
+const JOB_SPOTS := [
+	{"machine": Vector2i(6, 4), "farmer": Vector2i(7, 4)},
+	{"machine": Vector2i(18, 3), "farmer": Vector2i(17, 3)},
+	{"machine": Vector2i(20, 6), "farmer": Vector2i(19, 6)},
+	{"machine": Vector2i(4, 6), "farmer": Vector2i(5, 6)},
+]
+
+# 장비 종류별 색 (그림 대신 도형으로 그린다)
+const MACHINE_COLORS := {
+	"트랙터": Color("c8402f"),
+	"관리기": Color("e08a2c"),
+	"승용이앙기": Color("3f8f4f"),
+	"땅속작물수확기": Color("d9b12a"),
+	"퇴비살포기": Color("7a5532"),
+	"콩탈곡기": Color("6f4fa0"),
+}
+
+const SIGN_TEXT := (
+	"[농기계 임대사업소 업무 안내]\n"
+	+ "· 대여: 창구에서 접수 → 창고에서 장비를 꺼내 출고\n"
+	+ "· 반납: 마당에서 장비 확인\n"
+	+ "· 고장 전화: 전화 받기 → 컴퓨터에서 출장 올리기 → 트럭 타고 출발\n"
+	+ "· 복귀 후 컴퓨터에서 [출장 종료]. 2시간 이상이면 출장비 1만 원, 미만이면 무급"
+)
