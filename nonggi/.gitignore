@@ -1,0 +1,5 @@
+# Godot 캐시
+.godot/
+*.import
+export_presets.cfg
+/android/

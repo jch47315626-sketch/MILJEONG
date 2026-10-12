@@ -1,0 +1,23 @@
+; Engine configuration file.
+; Godot 4.3 이상에서 열어주세요.
+
+config_version=5
+
+[application]
+
+config/name="농기계 임대사업소"
+config/description="ENTJ 신규 주무관의 농기계 임대사업소 생존기"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.3", "GL Compatibility")
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
