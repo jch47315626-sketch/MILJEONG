@@ -44,6 +44,7 @@ export const S = {
       telegraph: '전신 타전',
     },
     ghost: '당신은 유령입니다',
+    notice: { informed: '당신은 끌려갔습니다. 이제 유령입니다' },
     rejected: {
       generic: '지금은 할 수 없습니다',
       COOLDOWN: '아직 쿨다운 중입니다',

@@ -1,7 +1,7 @@
 // The ONLY file importing phaser: tests never import it.
 import Phaser from 'phaser';
 import { MAP } from '@miljeong/shared';
-import { COLORS, needsVisionOverlay, PLAYER_DRAW_RADIUS, PositionTracker, TILE } from './render';
+import { blockedTiles, COLORS, needsVisionOverlay, PLAYER_DRAW_RADIUS, PositionTracker, TILE } from './render';
 import type { GameStore } from './store';
 
 const DEPTH = { zones: 1, marks: 2, players: 3, names: 4, overlay: 10 } as const;
@@ -75,6 +75,17 @@ class GameScene extends Phaser.Scene {
     // bell and breaker
     g.fillStyle(COLORS.bell, 1).fillCircle(MAP.bell.x * TILE, MAP.bell.y * TILE, 8);
     g.fillStyle(COLORS.breaker, 1).fillRect(MAP.breaker.x * TILE - 7, MAP.breaker.y * TILE - 7, 14, 14);
+
+    // active checkpoint: the passage tiles are blocked (red fill + hatch)
+    for (const t of blockedTiles(view.sabotage, MAP)) {
+      const x0 = Math.floor(t.x) * TILE;
+      const y0 = Math.floor(t.y) * TILE;
+      g.fillStyle(COLORS.checkpoint, 0.45).fillRect(x0, y0, TILE, TILE);
+      g.lineStyle(2, COLORS.checkpoint, 0.9);
+      g.lineBetween(x0, y0 + TILE, x0 + TILE, y0).lineBetween(x0, y0 + TILE / 2, x0 + TILE / 2, y0);
+      g.lineBetween(x0 + TILE / 2, y0 + TILE, x0 + TILE, y0 + TILE / 2);
+      g.strokeRect(x0, y0, TILE, TILE);
+    }
 
     // task spots: only my unfinished tasks are highlighted
     const mine = new Set(view.me.tasks.filter((t) => !t.done).map((t) => t.taskId));

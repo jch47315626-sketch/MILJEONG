@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { MAP, type Intent, type PlayerView } from '@miljeong/shared';
 import { createHud, rejectText } from '../src/ui/hud';
 import { resetRoleReveal, roleRevealElement, takeReveal } from '../src/ui/roleReveal';
@@ -57,6 +57,38 @@ describe('hud', () => {
     hud.update(view('spy', { visible: [{ id: 'f', pos: { x: 20.5, y: 14 }, ghost: false }] , me: { ...view('spy').me, informReadyAt: 0 } }));
     hud.trigger('inform');
     expect(sent[1]).toEqual({ t: 'inform', target: 'f' });
+  });
+  test('sabotage indicator follows view.sabotage (정전 / 검문: <통로>), hidden otherwise', () => {
+    const host = document.createElement('div');
+    const hud = createHud(host, { send: () => {} });
+    const ind = () => q(host, 'hud-sabotage');
+    hud.update(view('fighter'));
+    expect(ind().hidden).toBe(true);
+    hud.update(view('fighter', { sabotage: { kind: 'blackout' } }));
+    expect(ind().hidden).toBe(false);
+    expect(ind().textContent).toBe('정전');
+    const p = MAP.passages[1];
+    hud.update(view('spy', { sabotage: { kind: 'checkpoint', passageId: p.id, endsAt: 60_000 } }));
+    expect(ind().textContent).toBe(`검문: ${p.name}`);
+    hud.update(view('spy'));
+    expect(ind().hidden).toBe(true);
+  });
+  test('notice: shown longer than a toast', () => {
+    vi.useFakeTimers();
+    try {
+      const host = document.createElement('div');
+      const hud = createHud(host, { send: () => {} });
+      hud.notice(S.game.notice.informed);
+      const t = q(host, 'hud-toast');
+      expect(t.hidden).toBe(false);
+      expect(t.textContent).toBe(S.game.notice.informed);
+      vi.advanceTimersByTime(2000);
+      expect(t.hidden).toBe(false);
+      vi.advanceTimersByTime(3000);
+      expect(t.hidden).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
   test('rejected text', () => {
     expect(rejectText('COOLDOWN')).toBe(S.game.rejected.COOLDOWN);

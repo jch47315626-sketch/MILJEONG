@@ -1,4 +1,4 @@
-import type { MapData, Vec } from '@miljeong/shared';
+import type { MapData, Sabotage, Vec } from '@miljeong/shared';
 
 /**
  * All art lives here (placeholder palette) so it can be swapped later.
@@ -27,6 +27,7 @@ export const COLORS = {
   overlay: 0x000000,
   overlayAlpha: 0.92,
   blackoutTint: 0x000010,
+  checkpoint: 0xc0392b,
 } as const;
 
 export const PLAYER_DRAW_RADIUS = 0.35 * TILE;
@@ -39,6 +40,12 @@ export function interpolate(prev: Vec, next: Vec, t: number): Vec {
 /** Ghosts get a radius of twice the longer map side; no darkness is drawn then. */
 export function needsVisionOverlay(visionRadius: number, map: MapData): boolean {
   return visionRadius < Math.max(map.width, map.height);
+}
+
+/** Tiles of the passage closed by an active checkpoint (drawn as blocked), else none. */
+export function blockedTiles(sab: Sabotage | null, map: MapData): Vec[] {
+  if (!sab || sab.kind !== 'checkpoint') return [];
+  return map.passages.find((p) => p.id === sab.passageId)?.tiles ?? [];
 }
 
 /**

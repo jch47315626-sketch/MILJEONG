@@ -3,6 +3,7 @@ import { activeConfig, availableActions, type ActionName } from '../game/input';
 import { S } from '../strings';
 import { el } from './dom';
 import { createTaskController } from './openTask';
+import { sabotageIndicator } from './notices';
 
 export interface HudDeps {
   send(intent: Intent): void;
@@ -19,6 +20,8 @@ export interface Hud {
   /** keyboard shortcut / button entry point, evaluated against the latest view */
   trigger(action: ActionName): void;
   toast(text: string): void;
+  /** like toast, but stays longer (important personal notices, e.g. being informed on) */
+  notice(text: string): void;
   /** server rejected an intent: closes a pending mini-game (toast) or just toasts */
   rejected(reason: RejectReason): void;
   taskOpen(): boolean;
@@ -31,6 +34,9 @@ export function rejectText(reason: RejectReason): string {
   if (reason === 'OUT_OF_RANGE') return m.OUT_OF_RANGE;
   return m.generic;
 }
+
+const TOAST_MS = 1500;
+const NOTICE_MS = 4000;
 
 function secondsLeft(readyAt: number, now: number): number {
   return Math.max(0, Math.ceil((readyAt - now) / 1000));
@@ -46,6 +52,7 @@ export function createHud(parent: HTMLElement, deps: HudDeps): Hud {
   const gaugeLabel = el('span', { class: 'hud-gauge-label' }, S.game.gauge);
   const gauge = el('div', { class: 'hud-gauge', 'data-testid': 'hud-gauge', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100' }, fill, gaugeLabel);
   const tasks = el('ul', { class: 'hud-tasks', 'data-testid': 'hud-tasks' });
+  const sabEl = el('div', { class: 'hud-sabotage', 'data-testid': 'hud-sabotage', hidden: true });
   const toastEl = el('div', { class: 'hud-toast', 'data-testid': 'hud-toast', hidden: true });
   const debug = import.meta.env.DEV ? el('div', { class: 'hud-debug', 'data-testid': 'debug-pos' }) : null;
 
@@ -72,7 +79,7 @@ export function createHud(parent: HTMLElement, deps: HudDeps): Hud {
   );
 
   const actions = el('div', { class: 'hud-actions' }, bTask, bFix, bInform, bReport, bBell, bSab, bGhost);
-  const root = el('div', { class: 'hud', 'data-testid': 'hud' }, el('div', { class: 'hud-top' }, gauge, tasks), menu, actions, toastEl, debug);
+  const root = el('div', { class: 'hud', 'data-testid': 'hud' }, el('div', { class: 'hud-top' }, gauge, tasks, sabEl), menu, actions, toastEl, debug);
   parent.append(root);
   const taskCtl = createTaskController({
     parent: root,
@@ -138,6 +145,9 @@ export function createHud(parent: HTMLElement, deps: HudDeps): Hud {
     gauge.dataset.value = String(pct);
     gaugeLabel.textContent = `${S.game.gauge} ${pct}%`;
     renderTasks(v);
+    const sabText = sabotageIndicator(v.sabotage, map);
+    sabEl.hidden = sabText === null;
+    if (sabEl.textContent !== (sabText ?? '')) sabEl.textContent = sabText ?? '';
 
     bTask.textContent = spy ? S.game.btn.camouflage : S.game.btn.task;
     bTask.disabled = a.task === null;
@@ -161,17 +171,18 @@ export function createHud(parent: HTMLElement, deps: HudDeps): Hud {
     if (debug) debug.textContent = `${v.me.pos.x.toFixed(2)},${v.me.pos.y.toFixed(2)}`;
   }
 
-  function toast(text: string): void {
+  function toast(text: string, ms = TOAST_MS): void {
     toastEl.textContent = text;
     toastEl.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => (toastEl.hidden = true), 1500);
+    toastTimer = setTimeout(() => (toastEl.hidden = true), ms);
   }
 
   return {
     update,
     trigger,
-    toast,
+    toast: (text) => toast(text),
+    notice: (text) => toast(text, NOTICE_MS),
     rejected(reason) {
       taskCtl.rejected();
       toast(rejectText(reason));

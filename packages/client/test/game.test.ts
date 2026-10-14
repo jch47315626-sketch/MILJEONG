@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { Intent, PlayerView } from '@miljeong/shared';
+import type { GameEvent, Intent, PlayerView } from '@miljeong/shared';
+import { S } from '../src/strings';
 
 const destroy = vi.fn();
 vi.mock('../src/game/GameScene', () => ({ createGame: () => ({ destroy }) }));
@@ -21,13 +22,17 @@ describe('game screen', () => {
     const offView = vi.fn();
     const offRej = vi.fn();
     const offErr = vi.fn();
+    const offEv = vi.fn();
+    let eventsCb: ((e: GameEvent[]) => void) | null = null;
     const sent: Intent[] = [];
     const conn = {
       lastView: null,
+      myId: 'me',
       send: (i: Intent) => sent.push(i),
       onView: (cb: (v: PlayerView) => void) => ((viewCb = cb), offView),
       onRejected: () => offRej,
       onError: () => offErr,
+      onEvents: (cb: (e: GameEvent[]) => void) => ((eventsCb = cb), offEv),
     };
     const root = document.createElement('div');
     document.body.append(root);
@@ -38,7 +43,15 @@ describe('game screen', () => {
     expect(sent).toEqual([{ t: 'move', dir: { x: 1, y: 0 } }]);
     await vi.waitFor(() => expect(root.querySelector('[data-testid="hud"]')).not.toBeNull());
     await new Promise((r) => setTimeout(r, 0));
+    // informed: notice only when I am the victim
+    const toast = root.querySelector('[data-testid="hud-toast"]') as HTMLElement;
+    eventsCb!([{ e: 'informed', victim: 'someone' }]);
+    expect(toast.hidden).toBe(true);
+    eventsCb!([{ e: 'informed', victim: 'me' }]);
+    expect(toast.hidden).toBe(false);
+    expect(toast.textContent).toBe(S.game.notice.informed);
     cleanup();
+    expect(offEv).toHaveBeenCalledTimes(1);
     expect(offView).toHaveBeenCalledTimes(1);
     expect(offRej).toHaveBeenCalledTimes(1);
     expect(offErr).toHaveBeenCalledTimes(1);

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { MAP } from '@miljeong/shared';
-import { interpolate, PositionTracker, INTERP_MS, needsVisionOverlay } from '../src/game/render';
+import { blockedTiles, interpolate, PositionTracker, INTERP_MS, needsVisionOverlay } from '../src/game/render';
 
 describe('interpolate', () => {
   test('lerps and clamps t', () => {
@@ -35,5 +35,15 @@ describe('needsVisionOverlay', () => {
   test('ghosts see all: radius at least map size skips the overlay', () => {
     expect(needsVisionOverlay(5, MAP)).toBe(true);
     expect(needsVisionOverlay(Math.max(MAP.width, MAP.height) * 2, MAP)).toBe(false);
+  });
+});
+
+describe('blockedTiles', () => {
+  test('active checkpoint → that passage\'s tiles; otherwise none', () => {
+    const p = MAP.passages[0];
+    expect(blockedTiles(null, MAP)).toEqual([]);
+    expect(blockedTiles({ kind: 'blackout' }, MAP)).toEqual([]);
+    expect(blockedTiles({ kind: 'checkpoint', passageId: p.id, endsAt: 1 }, MAP)).toEqual(p.tiles);
+    expect(blockedTiles({ kind: 'checkpoint', passageId: 'nope', endsAt: 1 }, MAP)).toEqual([]);
   });
 });

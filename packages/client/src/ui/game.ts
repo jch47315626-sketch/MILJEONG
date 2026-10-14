@@ -8,6 +8,7 @@ import { createMeeting } from './meeting';
 import { el } from './dom';
 import { S } from '../strings';
 import { showRoleReveal, takeReveal } from './roleReveal';
+import { eventNotice } from './notices';
 import type { Vec } from '@miljeong/shared';
 
 /** In-game screen: Phaser world + DOM HUD. Returns the cleanup (destroys Phaser, unsubscribes everything). */
@@ -66,6 +67,12 @@ export function render(root: HTMLElement, ctx: ScreenCtx): () => void {
 
   const offs = [
     conn.onView(onView),
+    conn.onEvents((events) => {
+      for (const e of events) {
+        const text = eventNotice(e, conn.myId);
+        if (text) hud.notice(text);
+      }
+    }),
     conn.onRejected((m) => hud.rejected(m.reason)),
     conn.onError((m) => {
       if (m.code === 'CHAT_RATE') hud.toast(S.meeting.chatRate);

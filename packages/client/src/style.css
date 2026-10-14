@@ -48,6 +48,8 @@ hr { width: 100%; border: 0; border-top: 1px solid #2c3140; margin: 8px 0; }
 .hud-menu button { min-height: 40px; }
 .hud-toast { position: absolute; left: 50%; top: 40%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 8px 16px; border-radius: 20px; color: var(--danger); pointer-events: none; }
 .hud-toast[hidden] { display: none; }
+.hud-sabotage { align-self: flex-start; background: rgba(192,57,43,0.85); color: #fff; font-weight: 700; padding: 4px 10px; border-radius: 8px; }
+.hud-sabotage[hidden] { display: none; }
 .hud-debug { position: absolute; left: 8px; bottom: 8px; font-size: 10px; color: transparent; pointer-events: none; }
 .joystick { position: absolute; left: 20px; bottom: 20px; width: 128px; height: 128px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.25); touch-action: none; }
 .joystick-knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: rgba(232,176,74,0.7); pointer-events: none; }
