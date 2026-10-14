@@ -1,6 +1,8 @@
 import { applyBell } from './actions/bell';
 import { applyInform } from './actions/inform';
 import { applyReport } from './actions/report';
+import { applyVote } from './actions/vote';
+import { applyChat } from './actions/chat';
 import { applyMove } from './actions/move';
 import { applyTaskComplete, applyTaskStart } from './actions/task';
 import type { ApplyResult, GameState, Intent } from './types';
@@ -42,9 +44,13 @@ export function applyIntent(
     // Plug in by adding a file under src/actions/ and a case above.
     case 'sabotage':
     case 'fixBreaker':
-    case 'vote':
-    case 'chat':
       return BAD;
+    case 'vote':
+      if (!isStr(i.target)) return BAD;
+      return applyVote(state, playerId, i.target);
+    case 'chat':
+      if (!isStr(i.text)) return BAD;
+      return applyChat(state, playerId, i.text, now);
     default:
       return BAD;
   }

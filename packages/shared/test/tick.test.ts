@@ -68,6 +68,6 @@ test('BAD_INPUT for malformed intent, state untouched', () => {
   expect(bad({ t: 'nope' })).toEqual(R);
   expect(bad(null)).toEqual(R);
   expect(bad({ t: 'taskStart', taskId: 5 })).toEqual(R);
-  expect(bad({ t: 'vote', target: 'p1' })).toEqual(R);
+  expect(bad({ t: 'vote', target: 5 })).toEqual(R);
   expect(JSON.parse(JSON.stringify(s))).toEqual(snap);
 });
