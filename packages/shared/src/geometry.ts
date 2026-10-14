@@ -38,7 +38,14 @@ export function moveWithCollision(
   blocked: (tx: number, ty: number) => boolean,
 ): Vec {
   let { x, y } = pos;
-  if (delta.x !== 0 && fits(map, x + delta.x, y, blocked)) x += delta.x;
-  if (delta.y !== 0 && fits(map, x, y + delta.y, blocked)) y += delta.y;
+  // A footprint already overlapping a blocked tile must not trap the mover; walls stay absolute.
+  const r = PLAYER_RADIUS;
+  const cur = new Set<string>();
+  for (const [cx, cy] of [[pos.x - r, pos.y - r], [pos.x + r, pos.y - r], [pos.x - r, pos.y + r], [pos.x + r, pos.y + r]]) {
+    if (blocked(Math.floor(cx), Math.floor(cy))) cur.add(`${Math.floor(cx)},${Math.floor(cy)}`);
+  }
+  const eff = cur.size === 0 ? blocked : (tx: number, ty: number) => !cur.has(`${tx},${ty}`) && blocked(tx, ty);
+  if (delta.x !== 0 && fits(map, x + delta.x, y, eff)) x += delta.x;
+  if (delta.y !== 0 && fits(map, x, y + delta.y, eff)) y += delta.y;
   return { x, y };
 }

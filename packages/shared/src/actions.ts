@@ -3,6 +3,7 @@ import { applyInform } from './actions/inform';
 import { applyReport } from './actions/report';
 import { applyVote } from './actions/vote';
 import { applyChat } from './actions/chat';
+import { applySabotage, applyFixBreaker } from './actions/sabotage';
 import { applyMove } from './actions/move';
 import { applyTaskComplete, applyTaskStart } from './actions/task';
 import type { ApplyResult, GameState, Intent } from './types';
@@ -40,11 +41,14 @@ export function applyIntent(
       return applyReport(state, playerId, now);
     case 'bell':
       return applyBell(state, playerId, now);
-    // --- Dispatcher branch for intents whose handlers arrive in Tasks 4-8.
-    // Plug in by adding a file under src/actions/ and a case above.
     case 'sabotage':
-    case 'fixBreaker':
+      if (i.kind === 'blackout') return applySabotage(state, playerId, 'blackout', null, now);
+      if (i.kind === 'checkpoint' && isStr(i.passageId)) {
+        return applySabotage(state, playerId, 'checkpoint', i.passageId, now);
+      }
       return BAD;
+    case 'fixBreaker':
+      return applyFixBreaker(state, playerId);
     case 'vote':
       if (!isStr(i.target)) return BAD;
       return applyVote(state, playerId, i.target);

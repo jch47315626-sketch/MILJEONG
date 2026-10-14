@@ -1,4 +1,5 @@
 import { moveWithCollision } from './geometry';
+import { isTileBlocked } from './actions/sabotage';
 import { resolveMeeting } from './meeting';
 import type { GameEvent, GameState } from './types';
 
@@ -35,7 +36,7 @@ export function tick(state: GameState, now: number, dtMs: number): GameEvent[] {
     if (p.left || (p.dir.x === 0 && p.dir.y === 0)) continue;
     const delta = { x: p.dir.x * step, y: p.dir.y * step };
     if (p.alive) {
-      p.pos = moveWithCollision(state.map, p.pos, delta, () => false);
+      p.pos = moveWithCollision(state.map, p.pos, delta, (tx, ty) => isTileBlocked(state, tx, ty));
     } else {
       p.pos = {
         x: Math.min(Math.max(p.pos.x + delta.x, 0), state.map.width),
@@ -43,6 +44,9 @@ export function tick(state: GameState, now: number, dtMs: number): GameEvent[] {
       };
     }
   }
-  void now;
+  if (state.sabotage?.kind === 'checkpoint' && now >= state.sabotage.endsAt) {
+    state.sabotage = null;
+    events.push({ e: 'sabotageEnded' });
+  }
   return events;
 }

@@ -9,4 +9,5 @@ export * from './game';
 export * from './tasks';
 export * from './tick';
 export * from './actions';
+export { isTileBlocked } from './actions/sabotage';
 export * from './meeting';
