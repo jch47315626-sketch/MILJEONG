@@ -43,8 +43,6 @@ test('inform rejections', () => {
   f1.alive = false;
   expect(inf(sp.id, f1.id)).toEqual({ ok: false, reason: 'TARGET_INVALID' });
   f1.alive = true;
-  const other = spies(s)[1];
-  if (other) expect(inf(sp.id, other.id)).toEqual({ ok: false, reason: 'TARGET_INVALID' });
   expect(applyIntent(s, sp.id, { t: 'inform', target: 5 as never }, ready)).toEqual({ ok: false, reason: 'BAD_INPUT' });
   sp.alive = false;
   expect(inf(sp.id, f1.id)).toEqual({ ok: false, reason: 'NOT_ALIVE' });
@@ -124,4 +122,22 @@ test('bell: locked before 15s, once per player, range, blocked by active sabotag
   expect(bell(f2.id, T0 + 16000)).toEqual({ ok: false, reason: 'ALREADY_USED' });
   s.phase = 'meeting';
   expect(bell(f1.id, T0 + 16000)).toEqual({ ok: false, reason: 'WRONG_PHASE' });
+});
+
+test('inform rejects a spy target (2-spy game)', () => {
+  const s = newGame(8, 1, T0);
+  const [a, b] = spies(s);
+  expect(spies(s).length).toBe(2);
+  placeAt(s, a.id, { x: 10, y: 10 });
+  placeAt(s, b.id, { x: 10.5, y: 10 });
+  expect(applyIntent(s, a.id, { t: 'inform', target: b.id }, ready)).toEqual({ ok: false, reason: 'TARGET_INVALID' });
+  expect(b.alive).toBe(true);
+});
+
+test('exact boundary distance 1.5 succeeds for inform and report', () => {
+  const { s, sp, f1, f2 } = setup();
+  placeAt(s, f1.id, { x: 11.5, y: 10 });
+  expect(applyIntent(s, sp.id, { t: 'inform', target: f1.id }, ready).ok).toBe(true);
+  placeAt(s, f2.id, { x: 13, y: 10 });
+  expect(applyIntent(s, f2.id, { t: 'report' }, ready).ok).toBe(true);
 });
