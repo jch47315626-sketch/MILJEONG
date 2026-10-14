@@ -38,7 +38,7 @@ for (const level of LEVELS) {
   const problems = [];
   if (level.par !== r.path.length) problems.push(`par=${level.par} 인데 최소 ${r.path.length}수`);
   if (problems.length) failed++;
-  const people = start.people.length;
+  const people = start.total;
   console.log(`${problems.length ? '✘' : '✔'} ${String(level.id).padStart(2)} ${level.name.padEnd(8)} 최소 ${r.path.length}수 · 백성 ${people}명 · 함정 ${traps.length}/${fits.length}${problems.length ? '  ⚠ ' + problems.join(', ') : ''}`);
   if (showPath) console.log('     ' + r.path.map((m) => `${start.blocks[m.id].v}→(${m.x},${m.y})`).join('  '));
 }

@@ -138,7 +138,7 @@
     const wrap = $('boardWrap');
     const maxW = Math.min(wrap.clientWidth || 360, 460);
     const maxH = Math.max(300, window.innerHeight - 300);
-    const m = 0.5;
+    const m = state.targets.some((t) => t.house) ? 1.7 : 0.5; // 초가집 자리만큼 여백
     cs = Math.floor(Math.min(maxW / (state.w + m), maxH / (state.h + m)));
     const W = cs * (state.w + m), H = cs * (state.h + m);
     dpr = window.devicePixelRatio || 1;
@@ -159,7 +159,7 @@
   // ── 위쪽 표시: 구한 백성 수 ──
   function updateHud() {
     const icons = [];
-    for (const t of state.targets) for (let i = 0; i < t.people.length; i++) icons.push(t.saved ? '🙂' : '<span class="wet">🙂</span>');
+    for (let i = 0; i < state.total; i++) icons.push(i < state.saved ? '🙂' : '<span class="wet">🙂</span>');
     $('savedIcons').innerHTML = icons.join('');
     $('undoBtn').disabled = !game.history.length || game.over;
     $('hintBtn').disabled = game.over;
@@ -214,16 +214,26 @@
   // ── 판정 ──
   function afterMove(events) {
     for (const ev of events) {
-      if (ev.type !== 'save') continue;
-      const n = ev.target.people.length;
-      sfx.thud();
-      setTimeout(sfx.joy, 250);
-      anims.push(roofDrop(ev.block));
-      for (const [x, y] of ev.target.people) anims.push(cheer(x, y));
-      speakLine(`${Jamo.NAMES[ev.block.v]}! 백성 ${Jamo.NUM[n] || n} 명을 구했사옵니다!`);
+      if (ev.type === 'save') {
+        const n = ev.people.length;
+        sfx.thud();
+        setTimeout(sfx.joy, 250);
+        anims.push(roofLeave(ev.block, ev.people));
+        for (const [x, y] of ev.people) anims.push(cheer(x, y));
+        speakLine(`${Jamo.NAMES[ev.block.v]}! 백성 ${Jamo.NUM[n] || n} 명을 구했사옵니다!`);
+      } else if (ev.type === 'wave') {
+        // 초가집에서 다음 백성 무리가 나온다
+        const t = state.targets[ev.target];
+        for (const [x, y] of ev.people) anims.push(popOut(t, x, y));
+        setTimeout(() => speakLine(`초가집에서 백성이 또 나왔사옵니다! 이번엔 ${Jamo.NAMES[ev.v]} 자리이옵니다.`), 1400);
+      }
     }
     updateHud();
-    if (Engine.isWon(state)) return setTimeout(win, 1100);
+    if (Engine.isWon(state)) {
+      game.over = true;
+      setTimeout(() => anims.push(celebrate()), 700);
+      return setTimeout(win, 2600);
+    }
     if (!game.stuckSaid && !Engine.solve(Engine.clone(state), { maxStates: 30000 }).ok) {
       game.stuckSaid = true;
       setTimeout(() => {
@@ -234,7 +244,7 @@
   }
 
   function win() {
-    if (!game || game.over) return;
+    if (!game) return;
     game.over = true;
     const goals = [
       ['백성을 모두 구했어요', true],
@@ -247,7 +257,7 @@
     updateHud();
     sfx.joy();
     say('전하, 모든 백성을 구했사옵니다! 성은이 망극하옵니다!');
-    const total = state.people.length;
+    const total = state.total;
     $('resultTitle').textContent = '성은이 망극하옵니다!';
     $('resultStars').innerHTML = [0, 1, 2].map((i) => `<span class="${i < stars ? 'on' : ''}">★</span>`).join('');
     $('resultBody').innerHTML = `
@@ -272,7 +282,7 @@
     if (!game || game.over) return;
     const p = cellFromEvent(e);
     const b = Engine.blockAt(state, p.x, p.y);
-    if (b && !b.locked) {
+    if (b) {
       canvas.setPointerCapture(e.pointerId);
       // 블록을 잡는 순간 한 번 이름을 읽는다
       say(Jamo.NAMES[b.v], { interrupt: true });
@@ -280,9 +290,9 @@
       return;
     }
     // 지붕이나 빈 자리를 누르면 무슨 글자 자리인지 알려 준다
-    const t = (b && state.targets.find((tt) => tt.saved && tt.x === b.x && tt.y === b.y && tt.v === b.v)) || Engine.targetAt(state, p.x, p.y);
+    const t = Engine.targetAt(state, p.x, p.y);
     if (t) {
-      say(t.saved ? `${Jamo.NAMES[t.v]} 지붕 아래 백성이 있어요` : `${Jamo.NAMES[t.v]} 자리예요`, { interrupt: true });
+      say(`${Jamo.NAMES[Engine.current(t)]} 자리예요`, { interrupt: true });
       anims.push(pulseTarget(t));
     }
   });
@@ -311,7 +321,7 @@
     // 자석: 같은 모양 자리 한 칸 근처에 놓으면 쏙 들어간다
     const reach = Engine.reach(state, d.b);
     for (const t of state.targets) {
-      if (t.saved || t.v !== d.b.v) continue;
+      if (Engine.current(t) !== d.b.v) continue;
       if (Math.abs(t.x - cx) + Math.abs(t.y - cy) <= 1 && reach.has(t.x + ',' + t.y)) { cx = t.x; cy = t.y; }
     }
     if (cx === d.x0 && cy === d.y0) return;
@@ -338,17 +348,74 @@
     slideState.set(b.id, { vx, vy, t0: now() });
     return { t0: now(), dur: 160, draw: () => {} };
   }
-  function roofDrop(b) {
-    return { t0: now(), dur: 500, draw: (p) => {
-      // 지붕이 내려앉을 때 퍼지는 빗물
-      const cells = Engine.cells(b.v, b.x, b.y);
+  // 백성을 구한 지붕이 둥실 떠올라 떠나고, 빗물이 퍼진다
+  function roofLeave(b, people) {
+    return { t0: now(), dur: 900, draw: (p) => {
+      const e = ease(p);
+      ctx.save();
+      ctx.globalAlpha = 1 - p;
+      ctx.translate(0, -e * cs * 1.2);
+      drawBlock(b, b.x, b.y);
+      for (const [x, y] of people) drawPerson(x, y, true, 0.7);
+      ctx.restore();
       ctx.strokeStyle = `rgba(160,200,230,${1 - p})`;
       ctx.lineWidth = 2;
-      for (const [x, y] of cells) {
+      for (const [x, y] of Engine.cells(b.v, b.x, b.y)) {
         ctx.beginPath();
         ctx.arc(ox + (x + 0.5) * cs, oy + (y + 0.5) * cs, cs * (0.3 + p * 0.5), 0, Math.PI * 2);
         ctx.stroke();
       }
+    } };
+  }
+  // 초가집에서 백성이 폴짝 뛰어나온다
+  function popOut(t, x, y) {
+    const [hx, hy] = housePos(t);
+    const k = x + ',' + y;
+    hiddenPeople.set(k, now() + 1300);
+    return { t0: now() + 700, dur: 600, draw: (p) => {
+      const e = ease(p);
+      const tx = ox + (x + 0.5) * cs, ty = oy + (y + 0.5) * cs;
+      const cx = hx + (tx - hx) * e, cy = hy + (ty - hy) * e - Math.sin(p * Math.PI) * cs * 0.6;
+      drawPersonAt(cx, cy, false, 0.6 + 0.4 * e);
+    } };
+  }
+  const hiddenPeople = new Map();
+  // 마지막 축하: 큰 글씨와 불꽃
+  function celebrate() {
+    const sparks = Array.from({ length: 70 }, () => ({
+      x: 0.2 + Math.random() * 0.6, y: 0.25 + Math.random() * 0.3,
+      a: Math.random() * Math.PI * 2, v: 0.3 + Math.random() * 0.9,
+      c: Jamo.PALETTE[Math.floor(Math.random() * Jamo.PALETTE.length)].fill,
+    }));
+    sfx.joy();
+    setTimeout(sfx.joy, 400);
+    return { t0: now(), dur: 1800, draw: (p) => {
+      const W = canvas.width / dpr, H = canvas.height / dpr;
+      ctx.fillStyle = `rgba(20,14,8,${0.35 * Math.min(1, p * 4)})`;
+      ctx.fillRect(0, 0, W, H);
+      for (const sp of sparks) {
+        const r = sp.v * p * W * 0.35;
+        ctx.globalAlpha = 1 - p;
+        ctx.fillStyle = sp.c;
+        ctx.beginPath();
+        ctx.arc(sp.x * W + Math.cos(sp.a) * r, sp.y * H + Math.sin(sp.a) * r + p * p * cs, cs * 0.09, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = Math.min(1, p * 5);
+      const s = 0.8 + 0.25 * Math.sin(Math.min(1, p * 3) * Math.PI / 2);
+      ctx.save();
+      ctx.translate(W / 2, H * 0.42);
+      ctx.scale(s, s);
+      ctx.font = `${Math.round(cs * 1.1)}px ${font('brush')}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = cs * 0.18;
+      ctx.strokeStyle = '#7f2417';
+      ctx.strokeText('잘했어요!', 0, 0);
+      ctx.fillStyle = '#f3d27a';
+      ctx.fillText('잘했어요!', 0, 0);
+      ctx.restore();
+      ctx.globalAlpha = 1;
     } };
   }
   function cheer(x, y) {
@@ -365,7 +432,7 @@
   function pulseTarget(t) {
     return { t0: now(), dur: 600, draw: (p) => {
       ctx.globalAlpha = 0.5 * (1 - p);
-      drawShape(Engine.cells(t.v, t.x, t.y), { fill: '#fff6b0', inset: cs * 0.05 });
+      drawShape(Engine.cells(Engine.current(t), t.x, t.y), { fill: '#fff6b0', inset: cs * 0.05 });
       ctx.globalAlpha = 1;
     } };
   }
@@ -394,20 +461,28 @@
     ctx.fill('nonzero');
   }
 
+  const isVoid = (x, y) => state.walls[x + ',' + y] === 'void';
   function drawBoard() {
-    const W = state.w * cs, H = state.h * cs;
+    // 판 밖(빈 곳)을 뺀 칸만 나무 테두리와 마당으로 칠한다
     ctx.fillStyle = '#6b4a2b';
-    rr(ox - cs * 0.15, oy - cs * 0.15, W + cs * 0.3, H + cs * 0.3, cs * 0.2);
-    ctx.fill();
+    const f = cs * 0.15;
+    for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {
+      if (isVoid(x, y)) continue;
+      rr(ox + x * cs - f, oy + y * cs - f, cs + f * 2, cs + f * 2, cs * 0.2);
+      ctx.fill();
+    }
     ctx.fillStyle = '#e6d6b0';
-    ctx.fillRect(ox, oy, W, H);
+    for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) if (!isVoid(x, y)) ctx.fillRect(ox + x * cs, oy + y * cs, cs, cs);
     ctx.strokeStyle = 'rgba(120,95,60,.18)';
     ctx.lineWidth = 1;
-    for (let x = 1; x < state.w; x++) { ctx.beginPath(); ctx.moveTo(ox + x * cs + 0.5, oy); ctx.lineTo(ox + x * cs + 0.5, oy + H); ctx.stroke(); }
-    for (let y = 1; y < state.h; y++) { ctx.beginPath(); ctx.moveTo(ox, oy + y * cs + 0.5); ctx.lineTo(ox + W, oy + y * cs + 0.5); ctx.stroke(); }
+    for (let y = 0; y < state.h; y++) for (let x = 0; x < state.w; x++) {
+      if (isVoid(x, y)) continue;
+      ctx.strokeRect(ox + x * cs + 0.5, oy + y * cs + 0.5, cs - 1, cs - 1);
+    }
     for (const [k, kind] of Object.entries(state.walls)) {
       const [x, y] = k.split(',').map(Number);
       const px = ox + x * cs, py = oy + y * cs;
+      if (kind === 'void') continue;
       if (kind === 'water') {
         ctx.fillStyle = '#5d8fb8';
         ctx.fillRect(px, py, cs, cs);
@@ -437,8 +512,10 @@
 
   // 아직 비어 있는 글자 자리: 같은 색 점선
   function drawTarget(t) {
-    const g = Jamo.PALETTE[t.color];
-    const cells = Engine.cells(t.v, t.x, t.y);
+    const v = Engine.current(t);
+    if (!v) return;
+    const g = Jamo.PALETTE[state.colorOf[v]];
+    const cells = Engine.cells(v, t.x, t.y);
     ctx.globalAlpha = 0.18;
     drawShape(cells, { fill: g.fill });
     ctx.globalAlpha = 1;
@@ -450,9 +527,60 @@
     ctx.setLineDash([]);
   }
 
+  // 초가집 위치: 자리가 닿은 판 끝 바로 바깥
+  function housePos(t) {
+    const cells = Jamo.SHAPES[t.queue[0]].map(([dx, dy]) => [t.x + dx, t.y + dy]);
+    const xs = cells.map((c) => c[0]), ys = cells.map((c) => c[1]);
+    const mx = (Math.min(...xs) + Math.max(...xs) + 1) / 2, my = (Math.min(...ys) + Math.max(...ys) + 1) / 2;
+    const d = cs * 0.62;
+    if (t.house === 'top') return [ox + t.x * cs + cs / 2, oy - d];
+    if (t.house === 'bottom') return [ox + mx * cs, oy + state.h * cs + d];
+    if (t.house === 'left') return [ox - d, oy + t.y * cs + cs / 2];
+    return [ox + state.w * cs + d, oy + my * cs];
+  }
+
+  // 초가집: 노란 볏짚 지붕과 흙벽, 남은 백성 무리 수
+  function drawHouse(t) {
+    const [cx, cy] = housePos(t);
+    const s = cs * 0.95;
+    const left = t.queue.length - t.wave - 1;
+    ctx.fillStyle = '#d8c3a0';
+    ctx.strokeStyle = '#6b4a2b';
+    ctx.lineWidth = 2;
+    rr(cx - s * 0.36, cy - s * 0.05, s * 0.72, s * 0.42, s * 0.05);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#4a321c';
+    rr(cx - s * 0.1, cy + s * 0.08, s * 0.2, s * 0.29, s * 0.05);
+    ctx.fill();
+    ctx.fillStyle = '#d9a441';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - s * 0.08, s * 0.5, s * 0.26, 0, Math.PI, 0);
+    ctx.lineTo(cx + s * 0.5, cy - s * 0.02);
+    ctx.lineTo(cx - s * 0.5, cy - s * 0.02);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#8a5f1a';
+    ctx.stroke();
+    if (left > 0) {
+      ctx.fillStyle = '#c0392b';
+      ctx.beginPath();
+      ctx.arc(cx + s * 0.4, cy - s * 0.3, s * 0.17, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = `${Math.round(s * 0.24)}px ${font('ui')}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(left, cx + s * 0.4, cy - s * 0.29);
+    }
+  }
+
   // 백성: 상투 튼 머리에 흰 옷. 비 맞을 땐 울상, 구하면 웃는 얼굴
   function drawPerson(x, y, happy, scale = 1) {
-    const cx = ox + (x + 0.5) * cs, cy = oy + (y + 0.55) * cs, s = cs * scale;
+    drawPersonAt(ox + (x + 0.5) * cs, oy + (y + 0.55) * cs, happy, scale);
+  }
+  function drawPersonAt(cx, cy, happy, scale = 1) {
+    const s = cs * scale;
     if (scale === 1) {
       ctx.fillStyle = '#f7f3ea';
       ctx.strokeStyle = '#9c8f74';
@@ -530,12 +658,6 @@
       }
     }
     ctx.restore();
-    if (b.locked) {
-      ctx.strokeStyle = '#f3d27a';
-      ctx.lineWidth = 2;
-      shapePath(cells, inset + 2);
-      ctx.stroke();
-    }
   }
 
   function drawRain(t) {
@@ -546,7 +668,7 @@
     ctx.strokeStyle = 'rgba(90,130,170,.45)';
     ctx.lineWidth = 1.5;
     const W = state.w * cs, H = state.h * cs;
-    const left = state.targets.some((tt) => !tt.saved);
+    const left = !Engine.isWon(state);
     for (const d of rain) {
       const y = ((d.y + (t / 1000) * d.v * (left ? 0.9 : 0.25)) % 1) * (H + 40) - 20;
       const x = ((d.x + y / H * 0.08) % 1) * W;
@@ -563,7 +685,7 @@
     const h = game && game.hint;
     if (!h) return;
     const b = state.blocks.find((x) => x.id === h.id);
-    if (!b || b.locked) return;
+    if (!b) return;
     const pulse = 0.5 + 0.5 * Math.sin((t - h.t0) / 160);
     ctx.globalAlpha = 0.3 + 0.4 * pulse;
     drawShape(Engine.cells(b.v, b.x, b.y), { fill: '#fff6b0', inset: cs * 0.04 });
@@ -577,8 +699,16 @@
     if (!state) return;
     const t = now();
     drawBoard();
-    for (const tg of state.targets) if (!tg.saved) drawTarget(tg);
-    for (const tg of state.targets) if (!tg.saved) for (const [x, y] of tg.people) drawPerson(x, y, false);
+    for (const tg of state.targets) drawTarget(tg);
+    for (const tg of state.targets) {
+      const v = Engine.current(tg);
+      if (!v) continue;
+      for (const [x, y] of Engine.peopleCells(v, tg.x, tg.y)) {
+        if ((hiddenPeople.get(x + ',' + y) || 0) > t) continue;
+        drawPerson(x, y, false);
+      }
+    }
+    for (const tg of state.targets) if (tg.house) drawHouse(tg);
     drawHint(t);
     for (const b of state.blocks) {
       if (drag && drag.b === b) continue;
@@ -592,8 +722,6 @@
       }
       drawBlock(b, px, py);
     }
-    // 지붕 아래 구한 백성이 웃으며 내다본다
-    for (const tg of state.targets) if (tg.saved) for (const [x, y] of tg.people) drawPerson(x, y, true, 0.7);
     drawRain(t);
     if (drag) {
       drag.vx += (drag.cx - drag.vx) * 0.4;
