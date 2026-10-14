@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --bg: #2f2219;
   --wood: #6b4a2b;
   --wood-dark: #4a321c;
@@ -23,7 +24,12 @@ body {
 }
 button { font-family: inherit; cursor: pointer; }
 
-#app { max-width: 480px; margin: 0 auto; padding: 12px 16px 24px; min-height: 100%; }
+#app {
+  max-width: 480px; margin: 0 auto; min-height: 100%;
+  padding-block: 12px 24px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
 .screen.hidden, .hidden { display: none !important; }
 
 /* ── 메뉴 ── */
