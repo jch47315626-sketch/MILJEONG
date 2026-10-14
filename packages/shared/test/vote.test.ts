@@ -48,6 +48,8 @@ test('meeting resolves at voteEndsAt; early when all alive voted', () => {
   expect(s.ejectingEndsAt).toBe(end + s.config.ejectingMs);
 
   const e = meeting();
+  // explicit roles so the resolution does not end the game
+  for (const p of Object.values(e.players)) p.role = p.id === 'p0' ? 'spy' : 'fighter';
   e.players.p5.alive = false;
   e.players.p4.left = true;
   for (const id of ['p0', 'p1', 'p2']) vote(e, id, 'skip');

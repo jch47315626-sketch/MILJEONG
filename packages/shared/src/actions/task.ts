@@ -1,4 +1,5 @@
 import { getPlayer } from './lookup';
+import { endIfWon } from '../win';
 import { withinRange } from '../geometry';
 import type { ApplyResult, GameState, PlayerState, TaskAssignment } from '../types';
 
@@ -50,5 +51,5 @@ export function applyTaskComplete(
   if (f.task.startedAt === null) return { ok: false, reason: 'NOT_STARTED' };
   if (now - f.task.startedAt < state.config.taskMinMs) return { ok: false, reason: 'TOO_FAST' };
   f.task.done = true;
-  return { ok: true, events: [{ e: 'taskDone', player: playerId }] };
+  return { ok: true, events: [{ e: 'taskDone', player: playerId }, ...endIfWon(state)] };
 }

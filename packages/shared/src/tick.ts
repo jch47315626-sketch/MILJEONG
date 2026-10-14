@@ -1,6 +1,7 @@
 import { moveWithCollision } from './geometry';
 import { isTileBlocked } from './actions/sabotage';
 import { resolveMeeting } from './meeting';
+import { markLeft } from './presence';
 import type { GameEvent, GameState } from './types';
 
 /** Max simulated step per tick, to avoid tunneling through walls. */
@@ -8,6 +9,14 @@ export const MAX_TICK_MS = 100;
 
 export function tick(state: GameState, now: number, dtMs: number): GameEvent[] {
   const events: GameEvent[] = [];
+  if (state.phase !== 'ended') {
+    for (const id of state.order) {
+      const p = state.players[id];
+      if (p && !p.left && p.disconnectDeadline !== null && now >= p.disconnectDeadline) {
+        events.push(...markLeft(state, id, now));
+      }
+    }
+  }
   if (state.phase === 'meeting' && state.meeting) {
     const m = state.meeting;
     const allVoted = state.order.every((id) => {

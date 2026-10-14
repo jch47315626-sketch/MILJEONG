@@ -1,6 +1,7 @@
 import { withinRange } from '../geometry';
 import type { ApplyResult, GameState } from '../types';
 import { getPlayer } from './lookup';
+import { endIfWon } from '../win';
 
 export function applyInform(
   state: GameState,
@@ -25,5 +26,5 @@ export function applyInform(
   t.dir = { x: 0, y: 0 };
   state.traces.push({ id: `t${state.seq++}`, victimId: t.id, pos: { ...t.pos } });
   p.informReadyAt = now + state.config.informCooldownMs;
-  return { ok: true, events: [{ e: 'informed', victim: t.id }] };
+  return { ok: true, events: [{ e: 'informed', victim: t.id }, ...endIfWon(state)] };
 }

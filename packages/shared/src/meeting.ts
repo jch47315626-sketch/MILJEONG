@@ -1,3 +1,4 @@
+import { endIfWon } from './win';
 import type { Ejection, GameEvent, GameState } from './types';
 
 export function startMeeting(
@@ -76,5 +77,7 @@ export function resolveMeeting(state: GameState, now: number): GameEvent[] {
   state.phase = 'ejecting';
   state.ejectingEndsAt = now + state.config.ejectingMs;
   state.meeting = null;
-  return [{ e: 'ejected', ejection }];
+  const events: GameEvent[] = [{ e: 'ejected', ejection }];
+  events.push(...endIfWon(state));
+  return events;
 }
