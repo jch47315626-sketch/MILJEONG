@@ -152,3 +152,29 @@ test('ejection reveal respects config; no leaks across states; no null radius', 
   const fs = viewFor(shown, F(shown), NOW);
   expect(fs.roster.find((r) => r.id === t2)!.role).toBe('spy');
 });
+
+test('left viewer gets no positions or traces', () => {
+  const s = newGame(6);
+  const f = F(s);
+  s.players[f].alive = false;
+  s.players[f].left = true;
+  s.traces.push({ id: 't1', victimId: 'x', pos: { x: 3, y: 3 } });
+  const v = viewFor(s, f, NOW);
+  expect(v.visible).toEqual([]);
+  expect(v.traces).toEqual([]);
+  expect(v.ghostChat).toEqual([]);
+});
+
+test('returned view does not alias state', () => {
+  const s = newGame(6);
+  const f = F(s);
+  s.traces.push({ id: 't1', victimId: 'x', pos: { x: s.players[f].pos.x, y: s.players[f].pos.y } });
+  s.meetingChat.push({ from: f, text: 'hi', at: 1 });
+  const before = JSON.stringify(s);
+  const v = viewFor(s, f, NOW);
+  v.me.pos.x += 99;
+  v.me.tasks[0].done = !v.me.tasks[0].done;
+  v.traces[0].pos.x += 99;
+  v.chat[0].text = 'changed';
+  expect(JSON.stringify(s)).toBe(before);
+});

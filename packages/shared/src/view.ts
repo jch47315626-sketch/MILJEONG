@@ -112,13 +112,14 @@ export function viewFor(state: GameState, playerId: string, now: number): Player
     if (!p || p.left) continue;
     if (isGhost) {
       visible.push({ id, pos: copyVec(p.pos), ghost: !p.alive });
-    } else if (p.alive && dist(me.pos, p.pos) <= visionRadius) {
+    } else if (!me.left && p.alive && dist(me.pos, p.pos) <= visionRadius) {
       visible.push({ id, pos: copyVec(p.pos), ghost: false });
     }
   }
 
   const traces: Trace[] = [];
   for (const t of state.traces) {
+    if (me.left) break;
     if (isGhost || dist(me.pos, t.pos) <= visionRadius) {
       traces.push({ id: t.id, victimId: t.victimId, pos: copyVec(t.pos) });
     }
