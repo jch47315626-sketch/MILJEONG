@@ -3,8 +3,16 @@ import { Server, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { type ColyseusSDK, type Room as SDKRoom } from '@colyseus/sdk';
 import { boot, type ColyseusTestServer } from '@colyseus/testing';
-import { DEFAULT_CONFIG, FAST_CONFIG, type GameEvent, type PlayerView } from '@miljeong/shared';
-import { GameRoom, type LobbyMsg } from '../src/GameRoom';
+import {
+  DEFAULT_CONFIG,
+  FAST_CONFIG,
+  createGame,
+  createRng,
+  type GameEvent,
+  type GameState,
+  type PlayerView,
+} from '@miljeong/shared';
+import { GameRoom, cryptoSeed, type LobbyMsg } from '../src/GameRoom';
 
 /** Records every message a client receives. */
 interface Probe {
@@ -121,6 +129,65 @@ describe('GameRoom', () => {
     const b = probe(await sdk.create('game-fast', { name: 'B' }));
     expect(serverRoom(b.room.roomId).config).toBe(FAST_CONFIG);
     expect(serverRoom(b.room.roomId).maxClients).toBe(10);
+  });
+
+  test('rooms are private: join/joinOrCreate never enter an existing lobby (code only via joinById)', async () => {
+    const { code, ps, room } = await createLobby(2);
+    const err = await joinError(sdk.join('game', { name: 'Stranger' }));
+    expect(err.message).toBe('no rooms found with provided criteria');
+    const other = probe(await sdk.joinOrCreate('game', { name: 'Stranger' }));
+    expect(other.room.roomId).not.toBe(code);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(ps[0].lobby.at(-1)!.players).toHaveLength(2);
+    expect(room.clients.length).toBe(2);
+    // the code still works
+    probe(await sdk.joinById(code, { name: 'Friend' }));
+    await waitFor(() => ps[0].lobby.at(-1)?.players.length === 3, 5000, 'joinById');
+  });
+
+  test('role/task seed is crypto-random, never derived from the clock or view.startedAt', async () => {
+    // cryptoSeed: 32-bit integer, independent of Date.now()
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+    const seeds = Array.from({ length: 8 }, () => cryptoSeed());
+    now.mockRestore();
+    for (const s of seeds) {
+      expect(Number.isInteger(s)).toBe(true);
+      expect(s).toBeGreaterThanOrEqual(0);
+      expect(s).toBeLessThan(2 ** 32);
+    }
+    expect(new Set(seeds).size).toBeGreaterThan(1);
+
+    const assignment = (g: GameState) =>
+      g.order.map((id) => [g.players[id].role, g.players[id].tasks.map((t) => t.taskId)]);
+    const fromStartedAt = (g: GameState) =>
+      assignment(
+        createGame(
+          g.order.map((id) => ({ id, name: g.players[id].name })),
+          g.config,
+          createRng(g.startedAt),
+          g.startedAt,
+        ),
+      );
+    // the room uses its seed source (injected here) ...
+    const lob = await createLobby(4);
+    lob.room.seedSource = () => 12345;
+    lob.ps[0].room.send('start');
+    await waitFor(() => lob.room.game !== null, 5000, 'game start');
+    const g0 = lob.room.game!;
+    const expected = createGame(
+      g0.order.map((id) => ({ id, name: g0.players[id].name })),
+      g0.config,
+      createRng(12345),
+      g0.startedAt,
+    );
+    expect(assignment(g0)).toEqual(assignment(expected));
+    // ... and by default a client replaying createRng(view.startedAt) cannot recover the assignment
+    for (let i = 0; i < 3; i++) {
+      const { ps, room } = await startGame(4);
+      const g = room.game!;
+      expect(ps[0].views.at(-1)!.startedAt).toBe(g.startedAt);
+      expect(assignment(g)).not.toEqual(fromStartedAt(g));
+    }
   });
 
   test('lobby: host leaves → earliest remaining becomes host', async () => {

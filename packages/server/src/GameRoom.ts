@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { CloseCode, Room, ServerError, type Client } from '@colyseus/core';
 import {
   DEFAULT_CONFIG,
@@ -63,6 +64,15 @@ export function validName(raw: unknown): string | null {
   return len >= 1 && len <= NAME_MAX_LEN ? name : null;
 }
 
+/**
+ * Seed for role/task assignment: a CSPRNG 32-bit integer. It must never be
+ * derived from the clock, because `startedAt` is sent to every client and the
+ * shared rules engine is public (anyone could replay createRng(startedAt)).
+ */
+export function cryptoSeed(): number {
+  return randomInt(0, 2 ** 32);
+}
+
 /** Codes of rooms alive in this process (uniqueness of room codes). */
 const activeCodes = new Set<string>();
 
@@ -74,6 +84,8 @@ export class GameRoom extends Room {
   /** Authoritative game state; null while in the lobby. Public for tests only. */
   game: GameState | null = null;
   config: GameConfig = DEFAULT_CONFIG;
+  /** Seed source for createGame; replaceable in tests only. */
+  seedSource: () => number = cryptoSeed;
 
   private code = '';
   /** lobby members in join order (also kept during a game, for backToLobby) */
@@ -88,8 +100,11 @@ export class GameRoom extends Room {
    * Note: the creator's name is validated in onAuth like every other join (a
    * ServerError thrown here would be sent as an HTTP status, which must be < 600).
    * A room whose creator is rejected is disposed automatically once empty.
+   * The room is private: only `create` and `joinById` (with the code) reach it,
+   * never the public `join`/`joinOrCreate` matchmaking.
    */
-  onCreate(options: GameRoomDefineOptions): void {
+  async onCreate(options: GameRoomDefineOptions): Promise<void> {
+    await this.setPrivate(true);
     this.config = options?.configName === 'fast' ? FAST_CONFIG : DEFAULT_CONFIG;
     this.maxClients = this.config.maxPlayers;
 
@@ -184,7 +199,7 @@ export class GameRoom extends Room {
     this.game = createGame(
       this.lobby.map((p) => ({ id: p.id, name: p.name })),
       this.config,
-      createRng(now),
+      createRng(this.seedSource()),
       now,
     );
     this.lastTickAt = now;
