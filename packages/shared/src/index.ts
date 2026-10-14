@@ -13,3 +13,4 @@ export { isTileBlocked } from './actions/sabotage';
 export * from './meeting';
 export * from './win';
 export * from './presence';
+export * from './view';
