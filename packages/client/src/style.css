@@ -56,3 +56,34 @@ hr { width: 100%; border: 0; border-top: 1px solid #2c3140; margin: 8px 0; }
 .role-reveal.spy h2 { color: var(--danger); }
 .role-reveal.fighter h2 { color: var(--accent); }
 .role-reveal p { margin: 0; color: var(--muted); }
+
+/* ---- mini-games ---- */
+.minigame { position: absolute; inset: 0; z-index: 20; background: rgba(0,0,0,0.78); display: flex; align-items: center; justify-content: center; padding: 12px; pointer-events: auto; touch-action: none; }
+.mg-card { width: 100%; max-width: 340px; max-height: 100%; overflow: auto; background: var(--panel); border: 1px solid var(--accent); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.mg-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mg-head h2 { margin: 0; font-size: 18px; }
+.mg-close { min-width: 48px; padding: 0; }
+.mg-help { margin: 0; color: var(--muted); font-size: 13px; }
+.mg-body { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+.mg-status { margin: 0; text-align: center; color: var(--accent); font-weight: 700; }
+.mg-status[hidden] { display: none; }
+.mg-count { margin: 0; text-align: center; font-size: 18px; font-weight: 700; }
+.mg-count.over { color: var(--danger); }
+.mg-sub { margin: 0; text-align: center; color: var(--muted); font-size: 12px; }
+.mg-big { min-height: 64px; font-size: 22px; font-weight: 800; }
+.mg-row { display: flex; gap: 8px; }
+.mg-row > button { flex: 1; }
+.mg-paper { height: 90px; border: 1px solid #5a4a30; border-radius: 8px; background: #2a2418; display: flex; align-items: flex-end; overflow: hidden; }
+.mg-sheet { width: 100%; background: #e9dfc4; transition: height 0.1s; }
+.mg-cols { display: flex; gap: 12px; }
+.mg-col { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.mg-col button { min-height: 52px; font-size: 22px; }
+.mg-col button.sel { border-color: var(--accent); background: #3a3320; }
+.mg-tray { min-height: 56px; display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; border: 1px dashed #5a4a30; border-radius: 8px; align-content: flex-start; }
+.mg-coin { display: inline-flex; align-items: center; justify-content: center; min-width: 40px; min-height: 40px; border-radius: 50%; font-weight: 700; font-size: 12px; background: #8a6a2a; color: #fff; padding: 0 8px; }
+button.mg-coin.c50 { background: #b8892f; }
+.mg-steps { display: flex; justify-content: center; gap: 10px; font-size: 24px; color: var(--muted); }
+.mg-steps .ok { color: var(--accent); }
+.mg-pad { height: 130px; display: flex; align-items: center; justify-content: center; text-align: center; border: 2px dashed #5a4a30; border-radius: 12px; color: var(--muted); touch-action: none; }
+.mg-pattern { margin: 0; text-align: center; font-size: 32px; letter-spacing: 0.2em; font-weight: 800; }
+.mg-pattern.typed { color: var(--accent); min-height: 1.3em; }

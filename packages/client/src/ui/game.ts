@@ -3,7 +3,7 @@ import type { ScreenCtx } from '../main';
 import { createJoystick, isTouchDevice } from '../game/joystick';
 import { inputToDir, KeyboardInput, MoveSender } from '../game/input';
 import { newStore, pushView } from '../game/store';
-import { createHud, rejectText } from './hud';
+import { createHud } from './hud';
 import { el } from './dom';
 import { S } from '../strings';
 import { showRoleReveal, takeReveal } from './roleReveal';
@@ -18,7 +18,7 @@ export function render(root: HTMLElement, ctx: ScreenCtx): () => void {
   if (!conn) return () => {};
 
   const store = newStore();
-  const hud = createHud(screen, { send: (i) => conn.send(i) });
+  const hud = createHud(screen, { send: (i) => conn.send(i), onTaskOpenChange: () => refresh() });
   const mover = new MoveSender((i) => conn.send(i));
   let stick: Vec | null = null;
   let startedAt: number | null = null;
@@ -28,10 +28,10 @@ export function render(root: HTMLElement, ctx: ScreenCtx): () => void {
 
   const refresh = (): void => {
     // stop sending movement outside live play (meeting, ejection, ended)
-    const playing = store.view?.phase === 'playing';
+    const playing = store.view?.phase === 'playing' && !hud.taskOpen();
     mover.set(playing ? inputToDir(keyboard.keys, stick) : { x: 0, y: 0 });
   };
-  const keyboard = new KeyboardInput(refresh, (a) => hud.trigger(a));
+  const keyboard = new KeyboardInput(refresh, (a) => hud.trigger(a), () => hud.taskOpen());
   const joystick = isTouchDevice()
     ? createJoystick(screen, (v) => {
         stick = v;
@@ -55,7 +55,7 @@ export function render(root: HTMLElement, ctx: ScreenCtx): () => void {
 
   const offs = [
     conn.onView(onView),
-    conn.onRejected((m) => hud.toast(rejectText(m.reason))),
+    conn.onRejected((m) => hud.rejected(m.reason)),
   ];
   if (conn.lastView) onView(conn.lastView);
 

@@ -156,13 +156,15 @@ export class KeyboardInput {
   constructor(
     private readonly onChange: () => void,
     private readonly onAction: (a: ActionName) => void,
+    /** true while a modal (mini-game) owns the keyboard: movement and action keys are ignored */
+    blocked: () => boolean = () => false,
   ) {
     const typing = (e: Event): boolean => {
       const t = e.target as HTMLElement | null;
       return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
     };
     const down = (e: KeyboardEvent): void => {
-      if (typing(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (typing(e) || blocked() || e.ctrlKey || e.metaKey || e.altKey) return;
       const m = keyToMove(e.code);
       if (m) {
         e.preventDefault();

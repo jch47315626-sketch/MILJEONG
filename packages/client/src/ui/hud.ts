@@ -2,12 +2,14 @@ import { MAP, zoneAt, type GameConfig, type Intent, type MapData, type PlayerVie
 import { activeConfig, availableActions, type ActionName } from '../game/input';
 import { S } from '../strings';
 import { el } from './dom';
-import { openTask } from './openTask';
+import { createTaskController } from './openTask';
 
 export interface HudDeps {
   send(intent: Intent): void;
   map?: MapData;
   config?: GameConfig;
+  /** a mini-game opened or closed (the game screen stops movement while one is open) */
+  onTaskOpenChange?(open: boolean): void;
 }
 
 export interface Hud {
@@ -15,6 +17,9 @@ export interface Hud {
   /** keyboard shortcut / button entry point, evaluated against the latest view */
   trigger(action: ActionName): void;
   toast(text: string): void;
+  /** server rejected an intent: closes a pending mini-game (toast) or just toasts */
+  rejected(reason: RejectReason): void;
+  taskOpen(): boolean;
   destroy(): void;
 }
 
@@ -65,6 +70,12 @@ export function createHud(parent: HTMLElement, deps: HudDeps): Hud {
   const actions = el('div', { class: 'hud-actions' }, bTask, bFix, bInform, bReport, bBell, bSab);
   const root = el('div', { class: 'hud', 'data-testid': 'hud' }, el('div', { class: 'hud-top' }, gauge, tasks), menu, actions, toastEl, debug);
   parent.append(root);
+  const taskCtl = createTaskController({
+    parent: root,
+    send: (i) => deps.send(i),
+    map,
+    onOpenChange: (o) => deps.onTaskOpenChange?.(o),
+  });
 
   function doFix(): void {
     if (view && availableActions(view, map, config).fixBreaker) deps.send({ t: 'fixBreaker' });
@@ -77,7 +88,7 @@ export function createHud(parent: HTMLElement, deps: HudDeps): Hud {
       case 'task':
         // E doubles as the breaker key for fighters during a blackout
         if (a.fixBreaker) doFix();
-        else if (a.task) openTask(a.task, deps.send, view.me.role === 'fighter');
+        else if (a.task) taskCtl.open(a.task, view);
         break;
       case 'inform':
         if (a.inform) deps.send({ t: 'inform', target: a.inform });
@@ -114,6 +125,7 @@ export function createHud(parent: HTMLElement, deps: HudDeps): Hud {
 
   function update(v: PlayerView): void {
     view = v;
+    taskCtl.onView(v);
     const spy = v.me.role === 'spy';
     const a = availableActions(v, map, config);
     const pct = Math.round(v.gauge * 100);
@@ -155,7 +167,13 @@ export function createHud(parent: HTMLElement, deps: HudDeps): Hud {
     update,
     trigger,
     toast,
+    rejected(reason) {
+      taskCtl.rejected();
+      toast(rejectText(reason));
+    },
+    taskOpen: () => taskCtl.isOpen(),
     destroy() {
+      taskCtl.destroy();
       clearTimeout(toastTimer);
       root.remove();
     },
