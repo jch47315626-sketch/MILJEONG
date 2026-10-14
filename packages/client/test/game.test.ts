@@ -20,12 +20,14 @@ describe('game screen', () => {
     let viewCb: ((v: PlayerView) => void) | null = null;
     const offView = vi.fn();
     const offRej = vi.fn();
+    const offErr = vi.fn();
     const sent: Intent[] = [];
     const conn = {
       lastView: null,
       send: (i: Intent) => sent.push(i),
       onView: (cb: (v: PlayerView) => void) => ((viewCb = cb), offView),
       onRejected: () => offRej,
+      onError: () => offErr,
     };
     const root = document.createElement('div');
     document.body.append(root);
@@ -39,6 +41,7 @@ describe('game screen', () => {
     cleanup();
     expect(offView).toHaveBeenCalledTimes(1);
     expect(offRej).toHaveBeenCalledTimes(1);
+    expect(offErr).toHaveBeenCalledTimes(1);
     expect(sent[sent.length - 1]).toEqual({ t: 'move', dir: { x: 0, y: 0 } });
     expect(destroy).toHaveBeenCalledTimes(1);
     const n = sent.length;

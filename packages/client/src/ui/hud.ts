@@ -10,6 +10,8 @@ export interface HudDeps {
   config?: GameConfig;
   /** a mini-game opened or closed (the game screen stops movement while one is open) */
   onTaskOpenChange?(open: boolean): void;
+  /** ghost chat toggle button pressed */
+  onGhostChatToggle?(): void;
 }
 
 export interface Hud {
@@ -54,6 +56,8 @@ export function createHud(parent: HTMLElement, deps: HudDeps): Hud {
   const bInform = btn('btn-inform', S.game.btn.inform, () => trigger('inform'));
   const bReport = btn('btn-report', S.game.btn.report, () => trigger('report'));
   const bBell = btn('btn-bell', S.game.btn.bell, () => trigger('bell'));
+  const bGhost = btn('ghost-chat-toggle', S.meeting.ghostChatToggle, () => deps.onGhostChatToggle?.());
+  bGhost.hidden = true;
   const bSab = btn('btn-sabotage', S.game.btn.sabotage, () => (menu.hidden = !menu.hidden));
 
   const menuBtn = (label: string, intent: Intent) =>
@@ -67,7 +71,7 @@ export function createHud(parent: HTMLElement, deps: HudDeps): Hud {
     ),
   );
 
-  const actions = el('div', { class: 'hud-actions' }, bTask, bFix, bInform, bReport, bBell, bSab);
+  const actions = el('div', { class: 'hud-actions' }, bTask, bFix, bInform, bReport, bBell, bSab, bGhost);
   const root = el('div', { class: 'hud', 'data-testid': 'hud' }, el('div', { class: 'hud-top' }, gauge, tasks), menu, actions, toastEl, debug);
   parent.append(root);
   const taskCtl = createTaskController({
@@ -146,6 +150,7 @@ export function createHud(parent: HTMLElement, deps: HudDeps): Hud {
     if (!a.sabotage) menu.hidden = true;
     bReport.disabled = !a.report;
     bBell.disabled = !a.bell;
+    bGhost.hidden = v.me.alive || v.phase !== 'playing';
 
     if (spy) {
       const inf = secondsLeft(v.me.informReadyAt, v.now);

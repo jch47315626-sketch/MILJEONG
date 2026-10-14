@@ -4,7 +4,7 @@ import { S } from './strings';
 import * as title from './ui/title';
 import * as lobby from './ui/lobby';
 import * as game from './ui/game';
-import { renderResult } from './ui/placeholder';
+import * as result from './ui/result';
 
 export type Screen = 'title' | 'lobby' | 'game' | 'result';
 
@@ -35,8 +35,9 @@ const ctx: ScreenCtx = {
       if (m.phase === 'inGame' && (current === 'lobby' || current === null)) show('game');
       else if (m.phase === 'lobby' && (current === 'game' || current === 'result')) show('lobby');
     });
-    conn.onView(() => {
-      if (current === 'lobby') show('game');
+    conn.onView((v) => {
+      if (v.phase === 'ended' && (current === 'lobby' || current === 'game')) show('result');
+      else if (current === 'lobby') show('game');
     });
     conn.onLeave((code) => {
       if (ctx.conn !== conn) return;
@@ -61,7 +62,7 @@ const screens: Record<Screen, (root: HTMLElement, ctx: ScreenCtx) => () => void>
   title: title.render,
   lobby: lobby.render,
   game: game.render,
-  result: renderResult,
+  result: result.render,
 };
 
 export function show(screen: Screen): void {

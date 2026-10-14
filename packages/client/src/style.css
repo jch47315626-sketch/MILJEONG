@@ -87,3 +87,33 @@ button.mg-coin.c50 { background: #b8892f; }
 .mg-pad { height: 130px; display: flex; align-items: center; justify-content: center; text-align: center; border: 2px dashed #5a4a30; border-radius: 12px; color: var(--muted); touch-action: none; }
 .mg-pattern { margin: 0; text-align: center; font-size: 32px; letter-spacing: 0.2em; font-weight: 800; }
 .mg-pattern.typed { color: var(--accent); min-height: 1.3em; }
+
+/* ---- meeting / ejection / chat / result ---- */
+.meeting-overlay { position: absolute; inset: 0; z-index: 30; background: rgba(8,6,3,0.96); display: flex; align-items: stretch; justify-content: center; padding: 8px; touch-action: auto; overflow: auto; user-select: text; -webkit-user-select: text; }
+.meeting-overlay[hidden], .ejection-overlay[hidden] { display: none; }
+.meeting-card { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 8px; }
+.meeting-card h2 { margin: 0; font-size: 18px; }
+.meeting-info, .meeting-timer { margin: 0; color: var(--muted); }
+.meeting-timer { color: var(--accent); font-weight: 800; font-size: 20px; }
+.vote-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
+.vote-card { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; justify-content: flex-start; padding: 6px 10px; min-height: 48px; text-align: left; }
+.vote-card.dead { filter: grayscale(1); opacity: 0.45; }
+.vote-card.chosen, .vote-skip.chosen { border-color: var(--accent); background: #3a3320; }
+.vote-card .tag { margin-left: 0; }
+.tag.voted { color: #7be08a; }
+.chat-tab { color: var(--accent); font-weight: 700; font-size: 13px; }
+.chat-tab[hidden], .notice[hidden] { display: none; }
+.chat-panel { display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 120px; }
+.chat-log { flex: 1; min-height: 80px; max-height: 32dvh; overflow-y: auto; background: var(--panel); border-radius: 10px; padding: 6px 10px; }
+.chat-msg { padding: 2px 0; word-break: break-word; }
+.chat-from { margin-right: 8px; color: var(--accent); }
+.chat-row { display: flex; gap: 6px; }
+.chat-row input { flex: 1; min-width: 0; }
+.ejection-overlay { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.9); padding: 24px; }
+.ejection-text { font-size: 24px; font-weight: 800; text-align: center; margin: 0; line-height: 1.5; }
+.ghost-float { position: absolute; right: 8px; bottom: 80px; z-index: 15; width: min(320px, calc(100% - 16px)); background: rgba(20,22,28,0.92); border: 1px solid #3a4152; border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.ghost-float .chat-log { max-height: 140px; }
+.result-banner { font-size: 36px; }
+.result-banner.spies { color: var(--danger); }
+.result-banner.fighters { color: var(--accent); }
+.result-row.spy .tag { color: var(--danger); }

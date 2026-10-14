@@ -4,6 +4,7 @@ import { createJoystick, isTouchDevice } from '../game/joystick';
 import { inputToDir, KeyboardInput, MoveSender } from '../game/input';
 import { newStore, pushView } from '../game/store';
 import { createHud } from './hud';
+import { createMeeting } from './meeting';
 import { el } from './dom';
 import { S } from '../strings';
 import { showRoleReveal, takeReveal } from './roleReveal';
@@ -18,7 +19,16 @@ export function render(root: HTMLElement, ctx: ScreenCtx): () => void {
   if (!conn) return () => {};
 
   const store = newStore();
-  const hud = createHud(screen, { send: (i) => conn.send(i), onTaskOpenChange: () => refresh() });
+  let ghostChatOpen = false;
+  const meeting = createMeeting(screen, { send: (i) => conn.send(i) });
+  const hud = createHud(screen, {
+    send: (i) => conn.send(i),
+    onTaskOpenChange: () => refresh(),
+    onGhostChatToggle: () => {
+      ghostChatOpen = !ghostChatOpen;
+      meeting.setGhostChatOpen(ghostChatOpen);
+    },
+  });
   const mover = new MoveSender((i) => conn.send(i));
   let stick: Vec | null = null;
   let startedAt: number | null = null;
@@ -46,6 +56,7 @@ export function render(root: HTMLElement, ctx: ScreenCtx): () => void {
     }
     pushView(store, view);
     hud.update(view);
+    meeting.update(view);
     if (takeReveal(view)) {
       hideReveal?.();
       hideReveal = showRoleReveal(screen, view);
@@ -56,6 +67,9 @@ export function render(root: HTMLElement, ctx: ScreenCtx): () => void {
   const offs = [
     conn.onView(onView),
     conn.onRejected((m) => hud.rejected(m.reason)),
+    conn.onError((m) => {
+      if (m.code === 'CHAT_RATE') hud.toast(S.meeting.chatRate);
+    }),
   ];
   if (conn.lastView) onView(conn.lastView);
 
@@ -79,6 +93,7 @@ export function render(root: HTMLElement, ctx: ScreenCtx): () => void {
     joystick?.destroy();
     hideReveal?.();
     hud.destroy();
+    meeting.destroy();
     game?.destroy();
     game = null;
   };
