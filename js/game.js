@@ -1,24 +1,44 @@
-// 자모냥 — 화면, 입력, 애니메이션, 진행 저장.
+// 자모냥 — 화면, 입력, 음성, 애니메이션, 진행 저장. (6살 눈높이: 타이머·실패 없음, 힌트·되돌리기)
 (function () {
   const { Jamo, Engine, LEVELS } = window;
   const $ = (id) => document.getElementById(id);
-  const WORLD_NAMES = { 1: '서당', 2: '장터', 3: '궁궐' };
-  const ITEMS = [
-    { id: 'brush', ico: '🖌️', name: '붓', desc: '자음 하나의 색을 바꿉니다' },
-    { id: 'eraser', ico: '🧽', name: '지우개', desc: '자음이나 옛한글 돌 하나를 지웁니다' },
-    { id: 'stamp', ico: '🔴', name: '도장', desc: '블록 하나를 즉시 완성합니다' },
-    { id: 'hanji', ico: '📜', name: '한지', desc: '타이머를 30초 멈춥니다' },
-  ];
-  const FREEZE_MS = 30000;
+  const WORLD_NAMES = { 1: '한 글자', 2: '두 글자', 3: '자음 주머니' };
+  const PRAISE = ['참 잘했어요!', '멋져요!', '최고예요!', '대단해요!'];
 
   // ── 진행 저장 (브라우저 저장소가 막혀 있어도 동작) ──
-  const SAVE_KEY = 'jamonyang.progress.v1';
-  let progress = { stars: {}, best: {} };
+  const SAVE_KEY = 'jamonyang.kids.v1';
+  let progress = { stars: {} };
   try { progress = Object.assign(progress, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) { /* 무시 */ }
   const save = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(progress)); } catch (e) { /* 무시 */ } };
 
-  // ── 소리 (WebAudio 합성) ──
-  let audio = null, muted = false;
+  let muted = false;
+
+  // ── 음성 (브라우저 내장 한국어 음성) ──
+  const tts = window.speechSynthesis;
+  let koVoice = null;
+  function pickVoice() {
+    if (!tts) return;
+    const vs = tts.getVoices();
+    koVoice = vs.find((v) => /^ko/i.test(v.lang) && /google|yuna|sun-?hi|heami|female/i.test(v.name)) ||
+      vs.find((v) => /^ko/i.test(v.lang)) || null;
+  }
+  if (tts) { pickVoice(); tts.addEventListener && tts.addEventListener('voiceschanged', pickVoice); }
+  // interrupt: 앞에 말하던 것을 끊고 바로 말한다 (블록을 잡을 때처럼 즉각 반응이 필요할 때)
+  function say(text, { interrupt = false, rate = 0.85 } = {}) {
+    if (muted || !tts || !text) return;
+    try {
+      if (interrupt) tts.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR';
+      if (koVoice) u.voice = koVoice;
+      u.rate = rate;
+      u.pitch = 1.15;
+      tts.speak(u);
+    } catch (e) { /* 음성 없이 진행 */ }
+  }
+
+  // ── 효과음 (WebAudio 합성) ──
+  let audio = null;
   function tone(freq, dur, type = 'sine', vol = 0.15, slide = 0) {
     if (muted) return;
     try {
@@ -36,12 +56,12 @@
     } catch (e) { /* 소리 없이 진행 */ }
   }
   const sfx = {
-    pop: () => tone(660, 0.12, 'triangle', 0.15, 200),
-    slide: () => tone(180, 0.08, 'sine', 0.06),
-    stamp: () => { tone(90, 0.3, 'square', 0.12, -40); tone(140, 0.2, 'sine', 0.2, -60); },
+    pop: () => tone(660, 0.12, 'triangle', 0.12, 200),
+    slide: () => tone(180, 0.06, 'sine', 0.04),
+    stamp: () => { tone(90, 0.3, 'square', 0.08, -40); tone(140, 0.2, 'sine', 0.15, -60); },
     word: () => { tone(523, 0.15, 'triangle', 0.12); setTimeout(() => tone(784, 0.25, 'triangle', 0.12), 120); },
     crack: () => tone(1400, 0.08, 'square', 0.05, -600),
-    fail: () => tone(220, 0.5, 'sawtooth', 0.08, -120),
+    bump: () => tone(120, 0.1, 'sine', 0.08),
   };
 
   // ── 상태 ──
@@ -68,8 +88,9 @@
         const b = document.createElement('button');
         b.className = 'level-btn';
         const st = progress.stars[l.id] || 0;
-        b.innerHTML = `${l.id}<span class="st">${'★'.repeat(st)}</span>`;
-        b.title = l.name;
+        b.innerHTML = `<span style="font-size:30px">${isUnlocked(l) ? l.emoji : '🔒'}</span><span class="st">${'★'.repeat(st)}</span>`;
+        b.title = `${l.id}. ${l.name}`;
+        b.setAttribute('aria-label', `${l.id}단계 ${l.name}`);
         b.disabled = !isUnlocked(l);
         b.onclick = () => startLevel(l.id);
         grid.appendChild(b);
@@ -87,41 +108,32 @@
   }
   function showMenu() {
     game = null;
+    if (tts) tts.cancel();
     $('game').classList.add('hidden');
     $('overlay').classList.add('hidden');
     $('menu').classList.remove('hidden');
     buildMenu();
   }
 
-  // ── 레벨 시작 ──
+  // ── 단계 시작 ──
   function startLevel(id) {
     level = LEVELS.find((l) => l.id === id);
     state = Engine.load(level);
     anims = [];
     hiddenTiles.clear();
     drag = null;
-    game = {
-      timeLeft: level.time * 1000,
-      frozenUntil: 0,
-      last: performance.now(),
-      over: false,
-      items: Object.fromEntries(ITEMS.map((i) => [i.id, 1])),
-      itemMode: null,
-      brushTarget: null,
-      hiddenShown: false,
-    };
+    game = { over: false, history: [], hint: null, hints: 0, stuckSaid: false };
     $('menu').classList.add('hidden');
     $('overlay').classList.add('hidden');
     $('game').classList.remove('hidden');
-    $('worldName').textContent = `${level.world}. ${WORLD_NAMES[level.world]} · ${level.id}단계`;
-    $('levelName').textContent = level.name;
+    $('worldName').textContent = `${level.id}단계`;
+    $('levelName').textContent = `${level.emoji} ${level.name}`;
+    $('targetEmoji').textContent = level.emoji;
     $('tip').textContent = level.tip || '';
-    $('ruleBox').innerHTML = level.dirRule ? '<span class="rule-on">위치 규칙 ON</span>' : '';
-    closePalette();
-    buildItems();
     layout();
     playEvents(Engine.settle(state));
     updateHud();
+    say(`${level.name}를 만들어 봐요. ${level.tip || ''}`, { interrupt: true });
   }
 
   // ── 레이아웃 ──
@@ -129,7 +141,7 @@
     if (!state) return;
     const wrap = $('boardWrap');
     const maxW = Math.min(wrap.clientWidth || 360, 460);
-    const maxH = Math.max(320, window.innerHeight - 330);
+    const maxH = Math.max(300, window.innerHeight - 330);
     const m = state.pouches.length ? 1.8 : 1.0; // 주머니가 있으면 여백을 넓게
     cs = Math.floor(Math.min(maxW / (state.w + m), maxH / (state.h + m)));
     const W = cs * (state.w + m), H = cs * (state.h + m);
@@ -143,52 +155,16 @@
   }
   window.addEventListener('resize', layout);
 
-  // ── HUD ──
-  function score() {
-    let s = state.letters.length * Jamo.SCORE.letter;
-    for (const w of state.words) s += w.length * Jamo.SCORE.letter * (w.length - 1);
-    return s;
-  }
+  // ── 화면 위쪽: 만들 단어 칸 ──
   function updateHud() {
-    $('score').textContent = score();
-    $('moves').textContent = state.moves;
-    const found = Engine.hiddenFound(state);
-    if (level.hiddenWord) {
-      $('hiddenBox').innerHTML = found
-        ? `숨은 단어 <b style="color:#ffb4a8">「${level.hiddenWord}」</b>`
-        : `숨은 단어 <b>「${'○'.repeat(level.hiddenWord.length)}」</b>`;
-      if (found && !game.hiddenShown) {
-        game.hiddenShown = true;
-        toast(`숨은 단어 「${level.hiddenWord}」!`);
-      }
-    } else $('hiddenBox').innerHTML = `목표 <b>${level.par + 1}수</b> 이내`;
-    // 완성 글자 — 단어가 된 부분은 붉게
-    const seq = state.letters;
-    const mark = new Array(seq.length).fill(false);
-    const joined = seq.join('');
-    for (const w of new Set(state.words)) {
-      let i = joined.indexOf(w);
-      while (i >= 0) { for (let k = 0; k < w.length; k++) mark[i + k] = true; i = joined.indexOf(w, i + 1); }
-    }
-    const el = $('letters');
-    el.innerHTML = seq.map((c, i) => (mark[i] ? `<span class="word">${c}</span>` : c)).join('');
-    el.scrollLeft = el.scrollWidth;
-    for (const it of ITEMS) {
-      const b = document.querySelector(`.item[data-id="${it.id}"]`);
-      if (!b) continue;
-      b.disabled = game.items[it.id] <= 0 || game.over;
-      b.classList.toggle('active', game.itemMode === it.id);
-      b.querySelector('.n').textContent = game.items[it.id];
-    }
-  }
-
-  function buildItems() {
-    $('items').innerHTML = ITEMS.map(
-      (i) => `<button class="item" data-id="${i.id}" title="${i.desc}"><span class="ico">${i.ico}</span>${i.name}<span class="n">1</span></button>`
-    ).join('');
-    document.querySelectorAll('.item').forEach((b) => {
-      b.onclick = () => useItem(b.dataset.id);
-    });
+    const made = state.letters.slice();
+    $('targetSlots').innerHTML = [...level.word].map((ch) => {
+      const i = made.indexOf(ch);
+      if (i >= 0) made.splice(i, 1);
+      return `<span class="slot${i >= 0 ? ' done' : ''}">${i >= 0 ? ch : '?'}</span>`;
+    }).join('');
+    $('undoBtn').disabled = !game.history.length || game.over;
+    $('hintBtn').disabled = game.over;
   }
 
   let toastTimer = 0;
@@ -201,127 +177,92 @@
     toastTimer = setTimeout(() => t.classList.remove('show'), info ? 2200 : 1400);
   }
 
-  // ── 아이템 ──
-  function useItem(id) {
-    if (!game || game.over || game.items[id] <= 0) return;
-    closePalette();
-    if (id === 'hanji') {
-      game.items.hanji--;
-      game.frozenUntil = performance.now() + FREEZE_MS;
-      toast('📜 시간이 30초 멈춥니다', true);
-      updateHud();
-      return;
-    }
-    game.itemMode = game.itemMode === id ? null : id;
-    if (game.itemMode) toast(ITEMS.find((i) => i.id === id).desc, true);
+  // ── 도우미: 되돌리기, 힌트, 다시 듣기 ──
+  function doMove(fn) {
+    const before = Engine.clone(state);
+    const evs = fn();
+    if (!evs) return;
+    game.history.push(before);
+    game.hint = null;
+    playEvents(evs);
+    afterChange();
+  }
+
+  function undo() {
+    if (!game || game.over || !game.history.length) return;
+    state = game.history.pop();
+    anims = [];
+    hiddenTiles.clear();
+    game.hint = null;
+    game.stuckSaid = false;
+    sfx.slide();
     updateHud();
   }
 
-  function applyItemAt(x, y) {
-    const mode = game.itemMode;
-    const k = x + ',' + y;
-    if (mode === 'eraser') {
-      if (!state.tiles[k] && !state.stones[k]) return toast('자음이나 돌을 고르세요', true);
-      const was = state.tiles[k] || state.stones[k];
-      const evs = Engine.erase(state, x, y);
-      anims.push(burst(x, y, was.color ? Jamo.GROUPS[was.color].fill : '#8a8580'));
-      game.items.eraser--;
-      finishItem(evs);
-    } else if (mode === 'stamp') {
-      const b = Engine.blockAt(state, x, y);
-      if (!b) return toast('블록을 고르세요', true);
-      game.items.stamp--;
-      sfx.stamp();
-      anims.push(stampMark(b));
-      finishItem(Engine.stamp(state, b));
-    } else if (mode === 'brush') {
-      if (!state.tiles[k]) return toast('자음을 고르세요', true);
-      game.brushTarget = [x, y];
-      openPalette();
+  function hint() {
+    if (!game || game.over) return;
+    const r = Engine.solve(Engine.clone(state), { needWord: true, maxStates: 20000 });
+    const sol = r.ok ? r : Engine.solve(Engine.clone(state), { maxStates: 20000 });
+    if (!sol.ok || !sol.path.length) {
+      toast('되돌리기를 눌러 볼까요?', true);
+      say('되돌리기를 눌러 볼까요?', { interrupt: true });
+      return;
     }
+    const m = sol.path[0];
+    const b = state.blocks.find((x) => x.id === m.id);
+    game.hints++;
+    game.hint = { id: m.id, d: m.d || 0, flip: !!m.flip, t0: now() };
+    const dir = m.flip ? '눌러서 뒤집어' : Engine.axis(b) === 'h' ? (m.d > 0 ? '오른쪽으로 밀어' : '왼쪽으로 밀어') : m.d > 0 ? '아래로 내려' : '위로 올려';
+    say(`${Jamo.NAMES[b.v]}를 ${dir} 봐요.`, { interrupt: true });
   }
-  function finishItem(evs) {
-    game.itemMode = null;
-    playEvents(evs || []);
-    afterChange();
-  }
-  function openPalette() {
-    const p = $('palette');
-    p.innerHTML = Jamo.COLOR_ORDER.map((c) => {
-      const g = Jamo.GROUPS[c];
-      return `<button data-c="${c}" style="background:${g.fill}" title="${g.name}">${g.name}</button>`;
-    }).join('');
-    p.querySelectorAll('button').forEach((b) => {
-      b.onclick = () => {
-        const [x, y] = game.brushTarget;
-        game.items.brush--;
-        closePalette();
-        finishItem(Engine.recolor(state, x, y, b.dataset.c));
-      };
-    });
-    p.classList.remove('hidden');
-  }
-  function closePalette() { $('palette').classList.add('hidden'); }
+
+  $('undoBtn').onclick = undo;
+  $('hintBtn').onclick = hint;
+  $('tipBtn').onclick = () => level && say(level.tip, { interrupt: true });
+  $('target').onclick = () => level && say(level.word, { interrupt: true, rate: 0.7 });
 
   // ── 진행 판정 ──
   function afterChange() {
     updateHud();
-    if (Engine.isWon(state)) return setTimeout(win, 650);
-    if (!Engine.hasMoves(state)) {
-      const anyItem = Object.values(game.items).some((n) => n > 0);
-      if (anyItem) toast('막혔어요! 아이템을 써 보세요', true);
-      else setTimeout(() => lose('더 이상 움직일 수 없어요'), 500);
+    if (Engine.isWon(state)) return setTimeout(win, 700);
+    if (!Engine.hasMoves(state) && !game.stuckSaid) {
+      game.stuckSaid = true;
+      setTimeout(() => {
+        toast('막혔어요! 되돌리기를 눌러 봐요', true);
+        say('막혔어요. 되돌리기를 눌러 봐요.');
+      }, 900);
     }
   }
 
   function win() {
     if (!game || game.over) return;
     game.over = true;
-    const secs = Math.ceil(game.timeLeft / 1000);
-    const base = state.letters.length * Jamo.SCORE.letter;
-    const bonus = score() - base;
-    const timeBonus = secs * Jamo.SCORE.perSecond;
-    const total = base + bonus + timeBonus;
-    const third = level.hiddenWord ? Engine.hiddenFound(state) : state.moves <= level.par + 1;
+    const inOrder = Engine.hiddenFound(state);
     const goals = [
-      ['클리어', true],
-      ['시간 절반 이상 남기기', secs * 2 >= level.time],
-      [level.hiddenWord ? `숨은 단어 「${level.hiddenWord}」 완성` : `${level.par + 1}수 이내로 클리어`, third],
+      ['다 했어요', true],
+      [`${level.par + 2}번 안에 했어요`, state.moves <= level.par + 2],
+      [`「${level.word}」 순서대로 만들었어요`, inOrder],
     ];
     const stars = goals.filter((g) => g[1]).length;
     progress.stars[level.id] = Math.max(progress.stars[level.id] || 0, stars);
-    progress.best[level.id] = Math.max(progress.best[level.id] || 0, total);
     save();
-    sfx.word();
-    const words = [...new Set(state.words)];
-    showResult('완성!', stars, `
-      <table>
-        <tr><td>글자 ${state.letters.length}개</td><td>${base}</td></tr>
-        <tr><td>단어 보너스${words.length ? ' (' + words.join(', ') + ')' : ''}</td><td>${bonus}</td></tr>
-        <tr><td>남은 시간 ${secs}초</td><td>${timeBonus}</td></tr>
-        <tr class="total"><td>합계</td><td>${total}</td></tr>
-      </table>
-      <ul class="goals">${goals.map(([t, ok]) => `<li class="${ok ? 'ok' : ''}">${ok ? '★' : '☆'} ${t}</li>`).join('')}</ul>`, true);
-  }
-
-  function lose(reason) {
-    if (!game || game.over) return;
-    game.over = true;
-    sfx.fail();
     updateHud();
-    showResult('아쉬워요', 0, `<p>${reason}</p>`, false);
+    sfx.word();
+    const praise = PRAISE[Math.floor(Math.random() * PRAISE.length)];
+    say(`${level.word}! ${praise}`, { rate: 0.75 });
+    showResult(stars, `
+      <div class="big-word">${level.emoji}<br>${level.word}</div>
+      <ul class="goals">${goals.map(([t, ok]) => `<li class="${ok ? 'ok' : ''}">${ok ? '★' : '☆'} ${t}</li>`).join('')}</ul>`, praise);
   }
 
-  function showResult(title, stars, body, cleared) {
+  function showResult(stars, body, title) {
     $('resultTitle').textContent = title;
     $('resultStars').innerHTML = [0, 1, 2].map((i) => `<span class="${i < stars ? 'on' : ''}">★</span>`).join('');
-    $('resultStars').style.display = cleared ? '' : 'none';
     $('resultBody').innerHTML = body;
-    const idx = LEVELS.indexOf(level);
-    const next = LEVELS[idx + 1];
+    $('resultBody').querySelector('.big-word').onclick = () => say(level.word, { interrupt: true, rate: 0.7 });
+    const next = LEVELS[LEVELS.indexOf(level) + 1];
     const nb = $('resultNext');
-    nb.textContent = next ? '다음 레벨' : '레벨 선택';
-    nb.disabled = !cleared && !(next && isUnlocked(next));
+    nb.textContent = next ? '다음 단계' : '처음 화면';
     nb.onclick = () => (next ? startLevel(next.id) : showMenu());
     $('resultRetry').onclick = () => startLevel(level.id);
     $('overlay').classList.remove('hidden');
@@ -337,11 +278,16 @@
   canvas.addEventListener('pointerdown', (e) => {
     if (!game || game.over) return;
     const p = cellFromEvent(e);
-    if (game.itemMode) return applyItemAt(p.x, p.y);
-    closePalette();
     const b = Engine.blockAt(state, p.x, p.y);
-    if (!b) return;
+    if (!b) {
+      // 자음을 누르면 이름을 읽어 준다
+      const t = state.tiles[p.x + ',' + p.y];
+      if (t) { say(Jamo.NAMES[t.c], { interrupt: true }); anims.push(wiggle(p.x, p.y, t)); }
+      return;
+    }
     canvas.setPointerCapture(e.pointerId);
+    // 모음 블록을 잡는 순간 한 번 이름을 읽는다
+    say(Jamo.NAMES[b.v], { interrupt: true });
     drag = { b, sx: p.px, sy: p.py, range: Engine.moveRange(state, b), off: 0, moved: false, lastCell: 0 };
   });
 
@@ -358,26 +304,30 @@
   function endDrag() {
     if (!drag) return;
     const { b, moved } = drag;
-    const delta = Math.round(drag.off);
+    // 아이들 손가락은 멀리 못 끌 수 있어서, 반 칸만 끌어도 그쪽 끝까지 미끄러진다
+    let delta = Math.round(drag.off);
+    if (moved && Math.abs(drag.off) >= 0.35) delta = drag.off > 0 ? drag.range.max : drag.range.min;
     drag = null;
     if (!moved) {
       if (b.flippable) {
-        const evs = Engine.flip(state, b);
-        if (evs) { sfx.slide(); playEvents(evs); afterChange(); }
-        else toast('공간이 없어 뒤집을 수 없어요', true);
+        if (!Engine.flipTarget(state, b)) return toast('공간이 없어 뒤집을 수 없어요', true);
+        doMove(() => Engine.flip(state, b));
       }
       return;
     }
-    if (!delta) return;
-    playEvents(Engine.move(state, b, delta));
-    afterChange();
+    if (!delta) return sfx.bump();
+    doMove(() => Engine.move(state, b, delta));
   }
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
 
   $('backBtn').onclick = showMenu;
   $('restartBtn').onclick = () => level && startLevel(level.id);
-  $('soundBtn').onclick = () => { muted = !muted; $('soundBtn').textContent = muted ? '🔇' : '🔊'; };
+  $('soundBtn').onclick = () => {
+    muted = !muted;
+    if (muted && tts) tts.cancel();
+    $('soundBtn').textContent = muted ? '🔇' : '🔊';
+  };
 
   // ── 애니메이션 ──
   const now = () => performance.now();
@@ -404,6 +354,7 @@
         } });
         anims.push(floatText(ev.letter, to[0], to[1] - cs * 0.3, t0 + 240, Jamo.GROUPS[ev.color].dark));
         setTimeout(sfx.pop, delay + 200);
+        say(`${Jamo.NAMES[ev.c]}, ${ev.letter}`); // 자음이 블록으로 옮겨 갈 때: "기역, 가"
         delay += 140;
       } else if (ev.type === 'clear') {
         const blk = ev.block;
@@ -476,26 +427,64 @@
       ctx.globalAlpha = 1;
     } };
   }
-  function stampMark(b) {
-    const [cx, cy] = blockCenter(b);
-    return { t0: now(), dur: 600, draw: (p) => {
-      const s = p < 0.25 ? 2 - 4 * p : 1;
-      ctx.globalAlpha = p > 0.7 ? (1 - p) / 0.3 : 1;
+  // 누른 자음이 살짝 흔들린다
+  function wiggle(x, y, t) {
+    const k = x + ',' + y;
+    hiddenTiles.set(k, now() + 400);
+    return { t0: now(), dur: 400, draw: (p) => {
+      const a = Math.sin(p * Math.PI * 4) * 0.18 * (1 - p);
+      const s = 1 + 0.12 * Math.sin(p * Math.PI);
       ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(-0.15);
-      ctx.scale(s, s);
-      ctx.strokeStyle = '#c0392b';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(-cs * 0.45, -cs * 0.45, cs * 0.9, cs * 0.9);
-      ctx.fillStyle = '#c0392b';
-      ctx.font = `${Math.round(cs * 0.5)}px ${getComputedStyle(document.body).getPropertyValue('--font-brush')}`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('完', 0, 2);
+      ctx.translate(ox + (x + 0.5) * cs, oy + (y + 0.5) * cs);
+      ctx.rotate(a);
+      drawTile(-cs * s / 2, -cs * s / 2, cs * s, state.tiles[k] || t);
       ctx.restore();
-      ctx.globalAlpha = 1;
     } };
+  }
+
+  // 힌트: 움직일 블록을 반짝이고 방향 화살표를 그린다
+  function drawHint(t) {
+    const h = game && game.hint;
+    if (!h) return;
+    const b = state.blocks.find((x) => x.id === h.id);
+    if (!b) return;
+    const el = (t - h.t0) / 1000;
+    const pulse = 0.5 + 0.5 * Math.sin(el * 6);
+    ctx.globalAlpha = 0.25 + 0.35 * pulse;
+    for (const [x, y] of Engine.cells(b)) {
+      ctx.fillStyle = '#fff6b0';
+      rr(ox + x * cs + 2, oy + y * cs + 2, cs - 4, cs - 4, cs * 0.16);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    if (h.flip) return;
+    const [cx, cy] = blockCenter(b);
+    const horiz = Engine.axis(b) === 'h';
+    const sign = Math.sign(h.d);
+    const len = Math.abs(h.d) * cs;
+    const slide = (el % 1.2) / 1.2;
+    const dx = horiz ? sign : 0, dy = horiz ? 0 : sign;
+    const sx = cx + dx * cs * 0.5, sy = cy + dy * cs * 0.5;
+    const ex = cx + dx * (len + cs * 0.3), ey = cy + dy * (len + cs * 0.3);
+    ctx.strokeStyle = 'rgba(192,57,43,.85)';
+    ctx.fillStyle = 'rgba(192,57,43,.85)';
+    ctx.lineWidth = cs * 0.14;
+    ctx.lineCap = 'round';
+    ctx.setLineDash([cs * 0.2, cs * 0.18]);
+    ctx.lineDashOffset = -slide * cs * 0.76;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex - dx * cs * 0.3, ey - dy * cs * 0.3);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const w = cs * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex - dx * w - dy * w, ey - dy * w - dx * w);
+    ctx.lineTo(ex - dx * w + dy * w, ey - dy * w + dx * w);
+    ctx.closePath();
+    ctx.fill();
+    ctx.lineCap = 'butt';
   }
 
   // ── 그리기 ──
@@ -751,14 +740,7 @@
       drawBlock(drag.b, h ? drag.off : 0, h ? 0 : drag.off);
       ctx.shadowBlur = 0;
     }
-    // 아이템 사용 중 안내 테두리
-    if (game && game.itemMode) {
-      ctx.strokeStyle = '#e8b323';
-      ctx.lineWidth = 3;
-      ctx.setLineDash([8, 6]);
-      ctx.strokeRect(ox - 3, oy - 3, state.w * cs + 6, state.h * cs + 6);
-      ctx.setLineDash([]);
-    }
+    drawHint(t);
     anims = anims.filter((a) => {
       const el = t - a.t0;
       if (el < 0) return true;
@@ -768,38 +750,16 @@
     });
   }
 
-  // ── 메인 루프 (타이머) ──
-  let lastSec = -1;
+
+  // ── 메인 루프 ──
   function loop() {
-    const t = now();
-    if (game && !game.over) {
-      const dt = t - game.last;
-      const frozen = game.frozenUntil > t;
-      const paused = document.hidden || !$('overlay').classList.contains('hidden');
-      if (!frozen && !paused) game.timeLeft = Math.max(0, game.timeLeft - dt);
-      const ratio = game.timeLeft / (level.time * 1000);
-      const fill = $('timerFill');
-      fill.style.width = (ratio * 100).toFixed(1) + '%';
-      fill.classList.toggle('low', ratio < 0.25 && !frozen);
-      fill.classList.toggle('frozen', frozen);
-      const sec = Math.ceil(game.timeLeft / 1000);
-      if (sec !== lastSec) {
-        lastSec = sec;
-        $('timerText').textContent = frozen ? `📜 ${sec}초 (멈춤 ${Math.ceil((game.frozenUntil - t) / 1000)})` : `${sec}초`;
-      }
-      if (frozen) $('timerText').textContent = `📜 ${sec}초 (멈춤 ${Math.ceil((game.frozenUntil - t) / 1000)})`;
-      if (game.timeLeft <= 0) lose('시간이 다 됐어요');
-    }
-    if (game) game.last = t;
     render();
     requestAnimationFrame(loop);
   }
 
-  // 시작
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => {});
   showMenu();
   requestAnimationFrame(loop);
 
-  // 디버그/테스트용
-  window.__jamo = { get state() { return state; }, startLevel, get game() { return game; } };
+  // 테스트용
+  window.__jamo = { get state() { return state; }, startLevel, get game() { return game; }, say };
 })();

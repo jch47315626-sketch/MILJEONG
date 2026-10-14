@@ -14,7 +14,7 @@
     const s = {
       w, h,
       dirRule: !!level.dirRule,
-      hiddenWord: level.hiddenWord || null,
+      hiddenWord: level.word || level.hiddenWord || null,
       blocks: [],
       tiles: {},
       stones: {},
@@ -276,6 +276,50 @@
   Engine.stamp = function (s, b) {
     b.count = 0;
     return Engine.settle(s);
+  };
+
+
+  // 가능한 모든 한 수: { id, d } (밀기) 또는 { id, flip: true }
+  Engine.moves = function (s) {
+    const out = [];
+    for (const b of s.blocks) {
+      const r = Engine.moveRange(s, b);
+      for (let d = r.min; d <= r.max; d++) if (d) out.push({ id: b.id, d });
+      if (Engine.flipTarget(s, b)) out.push({ id: b.id, flip: true });
+    }
+    return out;
+  };
+
+  Engine.apply = function (s, m) {
+    const b = s.blocks.find((x) => x.id === m.id);
+    return m.flip ? Engine.flip(s, b) : Engine.move(s, b, m.d);
+  };
+
+  // BFS로 최소 수 풀이를 찾는다. needWord: 숨은 단어까지 순서대로 완성하는 풀이.
+  Engine.solve = function (start, { needWord = false, maxStates = 300000 } = {}) {
+    const keyOf = (st) => Engine.stateKey(st) + (needWord ? '#' + st.letters.join('') : '');
+    const goal = (st) => Engine.isWon(st) && (!needWord || Engine.hiddenFound(st));
+    const seen = new Set([keyOf(start)]);
+    let frontier = [{ state: start, path: [] }];
+    let explored = 0;
+    while (frontier.length) {
+      const next = [];
+      for (const node of frontier) {
+        explored++;
+        if (goal(node.state)) return { ok: true, path: node.path, state: node.state, explored };
+        for (const m of Engine.moves(node.state)) {
+          const n = Engine.clone(node.state);
+          Engine.apply(n, m);
+          const k = keyOf(n);
+          if (seen.has(k)) continue;
+          seen.add(k);
+          next.push({ state: n, path: node.path.concat(m) });
+        }
+        if (seen.size > maxStates) return { ok: false, reason: '상태 수 초과', explored };
+      }
+      frontier = next;
+    }
+    return { ok: false, reason: '해답 없음', explored };
   };
 
   // 솔버용 상태 키
