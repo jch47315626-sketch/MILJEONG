@@ -1,6 +1,6 @@
 import type { Ejection, PlayerView, Role } from '@miljeong/shared';
 import { S } from '../strings';
-import { createChatPanel } from './chat';
+import { createChatLog, createChatPanel } from './chat';
 import { el } from './dom';
 
 type Roster = PlayerView['roster'];
@@ -63,6 +63,8 @@ export interface MeetingDeps {
 
 export interface MeetingUi {
   update(view: PlayerView): void;
+  /** the server rejected an intent: drops an optimistic vote the server has not recorded */
+  rejected(): void;
   /** ghosts may chat while the game is playing: shows/hides the floating chat */
   setGhostChatOpen(open: boolean): void;
   destroy(): void;
@@ -77,11 +79,19 @@ export function createMeeting(parent: HTMLElement, deps: MeetingDeps): MeetingUi
   const skip = el('button', { type: 'button', class: 'vote-skip', 'data-testid': 'vote-skip', onclick: () => vote('skip') }, S.meeting.skip);
   const ghostNote = el('p', { class: 'notice', hidden: true }, S.meeting.ghostVoteInfo);
   const tab = el('div', { class: 'chat-tab', hidden: true }, S.meeting.ghostTab);
+  // ghosts read the living players' discussion (read-only) above their own ghost chat
+  const readLog = createChatLog();
+  const readonlyEl = el(
+    'div',
+    { class: 'chat-readonly', 'data-testid': 'meeting-chat-readonly', hidden: true },
+    el('div', { class: 'chat-tab' }, S.meeting.meetingChatReadonly),
+    readLog.root,
+  );
   const chat = createChatPanel(sendChat);
   const meetingEl = el(
     'div',
     { class: 'meeting-overlay', 'data-testid': 'meeting', hidden: true },
-    el('div', { class: 'meeting-card' }, el('h2', {}, S.meeting.title), info, timer, cards, skip, ghostNote, tab, chat.root),
+    el('div', { class: 'meeting-card' }, el('h2', {}, S.meeting.title), info, timer, cards, skip, ghostNote, readonlyEl, tab, chat.root),
   );
 
   const ejectText = el('p', { class: 'ejection-text', 'data-testid': 'ejection-text' });
@@ -123,7 +133,7 @@ export function createMeeting(parent: HTMLElement, deps: MeetingDeps): MeetingUi
         const dead = r.publiclyDead || r.left;
         const role = revealedRoles.get(r.id);
         const status = r.left
-          ? '이탈'
+          ? S.meeting.left
           : r.publiclyDead
             ? ejectedIds.has(r.id)
               ? S.meeting.ejected
@@ -164,6 +174,8 @@ export function createMeeting(parent: HTMLElement, deps: MeetingDeps): MeetingUi
     tab.hidden = !ghost;
     skip.hidden = ghost;
     renderCards(v);
+    readonlyEl.hidden = !ghost;
+    if (ghost) readLog.update(v.chat, v.roster);
     chat.update(ghost ? v.ghostChat : v.chat, v.roster);
   }
 
@@ -191,6 +203,12 @@ export function createMeeting(parent: HTMLElement, deps: MeetingDeps): MeetingUi
       ejectionEl.hidden = !ejecting;
       if (ejecting && v.lastEjection) ejectText.textContent = ejectionText(v.lastEjection, v.roster);
       syncFloat(v);
+    },
+    rejected() {
+      const v = view;
+      if (myVote === null || !v || !v.meeting || v.meeting.voted.includes(v.me.id)) return;
+      myVote = null;
+      renderCards(v);
     },
     setGhostChatOpen(open) {
       ghostOpen = open;

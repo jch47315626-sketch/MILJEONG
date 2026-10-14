@@ -75,7 +75,10 @@ export function render(root: HTMLElement, ctx: ScreenCtx): () => void {
         if (text) hud.notice(text);
       }
     }),
-    conn.onRejected((m) => hud.rejected(m.reason)),
+    conn.onRejected((m) => {
+      meeting.rejected();
+      hud.rejected(m.reason);
+    }),
     conn.onError((m) => {
       if (m.code === 'CHAT_RATE') hud.toast(S.meeting.chatRate);
     }),

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import type { Intent, PlayerView } from '@miljeong/shared';
 import { createMeeting, ejectionText, meetingTimerText, revealedRoles } from '../src/ui/meeting';
 import { renderChat } from '../src/ui/chat';
-import { resultContent } from '../src/ui/result';
+import { render as renderResult, resultContent } from '../src/ui/result';
 import { S } from '../src/strings';
 
 const roster = [
@@ -85,18 +85,50 @@ describe('meeting overlay', () => {
     ui.update(view({ meeting: { ...view().meeting!, discussEndsAt: 999_999 } }));
     expect((q(host, 'vote-skip') as HTMLButtonElement).disabled).toBe(false);
   });
-  test('ghost cannot vote and chats in ghost chat', () => {
+  test('ghost cannot vote; reads the meeting chat (read-only) and chats in ghost chat', () => {
     const { host, sent, ui } = mount();
     ui.update(view({ me: { ...view().me, alive: false }, ghostChat: [{ from: 'c', text: '으악', at: 1 }], chat: [{ from: 'b', text: '산자', at: 1 }] }));
     expect((q(host, 'vote-b') as HTMLButtonElement).disabled).toBe(true);
     expect(q(host, 'vote-skip').hidden).toBe(true);
-    expect(host.textContent).toContain('으악');
-    expect(host.textContent).not.toContain('산자');
+    const readonly = q(host, 'meeting-chat-readonly');
+    expect(readonly.hidden).toBe(false);
+    expect(readonly.textContent).toContain('산자');
+    expect(readonly.querySelector('input')).toBeNull();
+    expect(host.querySelectorAll('[data-testid="chat-input"]')).toHaveLength(1);
+    const panel = q(host, 'chat-input').closest('.chat-panel') as HTMLElement;
+    expect(panel.textContent).toContain('으악');
+    expect(panel.textContent).not.toContain('산자');
     const input = q(host, 'chat-input') as HTMLInputElement;
     input.value = '  안녕  ';
     q(host, 'chat-send').click();
     expect(sent).toEqual([{ t: 'chat', text: '안녕' }]);
     expect(input.value).toBe('');
+    // living players: no read-only log, their panel shows the meeting chat
+    const alive = mount();
+    alive.ui.update(view({ chat: [{ from: 'b', text: '산자', at: 1 }], ghostChat: [] }));
+    expect(q(alive.host, 'meeting-chat-readonly').hidden).toBe(true);
+    expect((q(alive.host, 'chat-input').closest('.chat-panel') as HTMLElement).textContent).toContain('산자');
+  });
+  test('rejected vote rolls back the optimistic choice; a confirmed vote stays', () => {
+    const { host, sent, ui } = mount();
+    ui.update(view());
+    q(host, 'vote-b').click();
+    expect((q(host, 'vote-skip') as HTMLButtonElement).disabled).toBe(true);
+    ui.rejected();
+    expect((q(host, 'vote-skip') as HTMLButtonElement).disabled).toBe(false);
+    expect(q(host, 'vote-b').classList.contains('chosen')).toBe(false);
+    q(host, 'vote-skip').click();
+    expect(sent).toEqual([{ t: 'vote', target: 'b' }, { t: 'vote', target: 'skip' }]);
+    // server confirmed (voted includes me): a later rejection (e.g. chat) keeps it
+    ui.update(view({ meeting: { ...view().meeting!, voted: ['a'] } }));
+    ui.rejected();
+    expect((q(host, 'vote-skip') as HTMLButtonElement).disabled).toBe(true);
+  });
+  test('left players are tagged with S.meeting.left', () => {
+    const { host, ui } = mount();
+    ui.update(view({ roster: [...roster, { id: 'd', name: '떠남', connected: false, left: true, publiclyDead: false, role: null }] }));
+    expect(S.meeting.left).toBe('이탈');
+    expect(q(host, 'vote-d').textContent).toContain(S.meeting.left);
   });
   test('chat: maxlength 100, Enter sends, whitespace not sent', () => {
     const { host, sent, ui } = mount();
@@ -110,6 +142,25 @@ describe('meeting overlay', () => {
     input.value = 'hi';
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
     expect(sent).toEqual([{ t: 'chat', text: 'hi' }]);
+  });
+  test('chat: Enter during IME composition is ignored (isComposing, or Safari keyCode 229)', () => {
+    const { host, sent, ui } = mount();
+    ui.update(view());
+    const input = q(host, 'chat-input') as HTMLInputElement;
+    input.value = '안녕';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229 }));
+    expect(sent).toEqual([]);
+    expect(input.value).toBe('안녕');
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13 }));
+    expect(sent).toEqual([{ t: 'chat', text: '안녕' }]);
+  });
+  test('chat log re-renders when a capped list shifts (same length, same timestamp)', () => {
+    const { host, ui } = mount();
+    const msgs = Array.from({ length: 50 }, (_, i) => ({ from: 'b', text: `m${i}`, at: 100 }));
+    ui.update(view({ chat: msgs }));
+    ui.update(view({ chat: [...msgs.slice(1), { from: 'a', text: 'new', at: 100 }] }));
+    expect(q(host, 'meeting').textContent).toContain('new');
   });
   test('ejection overlay shows text only while ejecting; revealed role is remembered', () => {
     const { host, ui } = mount();
@@ -148,5 +199,29 @@ describe('result', () => {
     const guest = resultContent(view({ phase: 'ended', winner: 'spies', roster: r }), false, () => {});
     expect(q(guest, 'result-winner').textContent).toBe('밀정 승리');
     expect(q(guest, 'back-to-lobby')).toBeNull();
+  });
+});
+
+describe('result screen lifecycle', () => {
+  test('callbacks arriving after cleanup (disposed) do not touch the DOM', () => {
+    const cbs: { view?: (v: PlayerView) => void; lobby?: () => void } = {};
+    const ended = view({ phase: 'ended', winner: 'fighters', roster: roster.map((r) => ({ ...r, role: 'fighter' as const })) });
+    const conn = {
+      myId: 'a',
+      lastLobby: { hostId: 'a' },
+      lastView: ended,
+      backToLobby: () => {},
+      onView: (cb: (v: PlayerView) => void) => ((cbs.view = cb), () => {}),
+      onLobby: (cb: () => void) => ((cbs.lobby = cb), () => {}),
+    };
+    const root = document.createElement('div');
+    const cleanup = renderResult(root, { conn } as never);
+    expect(q(root, 'result')).not.toBeNull();
+    cleanup();
+    root.replaceChildren();
+    conn.lastLobby = { hostId: 'b' }; // would change the signature and rebuild
+    cbs.lobby!();
+    cbs.view!({ ...ended, winner: 'spies' });
+    expect(root.childNodes).toHaveLength(0);
   });
 });

@@ -33,7 +33,9 @@ export function render(root: HTMLElement, ctx: ScreenCtx): () => void {
   const conn = ctx.conn;
   if (!conn) return () => {};
   let sig = '';
+  let disposed = false;
   const mount = (view: PlayerView): void => {
+    if (disposed) return;
     const isHost = conn.lastLobby?.hostId === conn.myId;
     // views keep arriving at 20Hz: rebuild only on change so a click is never lost mid-press
     const next = JSON.stringify([view.winner, isHost, view.roster.map((r) => [r.id, r.name, r.role])]);
@@ -51,5 +53,8 @@ export function render(root: HTMLElement, ctx: ScreenCtx): () => void {
       if (conn.lastView) mount(conn.lastView);
     }),
   ];
-  return () => offs.forEach((off) => off());
+  return () => {
+    disposed = true;
+    offs.forEach((off) => off());
+  };
 }
