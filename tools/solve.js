@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// 레벨 검증 — 모든 레벨에 해답이 있는지, par(최소 수)가 맞는지, 그림 단어를 순서대로 만들 수 있는지 확인한다.
-// 사용법: node tools/solve.js [레벨id ...] [--path]
+// 단계 검증 — 해답이 있는지, par(최소 수)가 맞는지, 첫 수로 자리를 잘못 고르면 막히는 함정이 몇 개인지 본다.
+// 사용법: node tools/solve.js [단계id ...] [--path]
 const path = require('path');
 require(path.join(__dirname, '../js/hangul.js'));
 require(path.join(__dirname, '../js/engine.js'));
@@ -11,40 +11,35 @@ const args = process.argv.slice(2);
 const showPath = args.includes('--path');
 const ids = args.filter((a) => !a.startsWith('--')).map(Number);
 
-function fmt(level, r) {
-  const s = Engine.load(level);
-  Engine.settle(s);
-  return r.path.map((m) => {
-    const b = s.blocks.find((x) => x.id === m.id);
-    const txt = m.flip ? `${b.v}뒤집기` : `${b.v}${Engine.axis(b) === 'h' ? (m.d > 0 ? '→' : '←') : m.d > 0 ? '↓' : '↑'}${Math.abs(m.d)}`;
-    Engine.apply(s, m);
-    return txt;
-  }).join('  ') + '  → ' + r.state.letters.join('');
-}
-
 let failed = 0;
 for (const level of LEVELS) {
   if (ids.length && !ids.includes(level.id)) continue;
-  const start = Engine.load(level);
-  const initEvents = Engine.settle(start);
-  const problems = [];
-  if (initEvents.some((e) => e.type === 'absorb')) problems.push('시작하자마자 흡수됨');
-  const r = Engine.solve(start);
+  let start;
+  try {
+    start = Engine.load(level);
+  } catch (e) {
+    failed++;
+    console.log(`✘ ${String(level.id).padStart(2)} ${level.name} — ${e.message}`);
+    continue;
+  }
+  const r = Engine.solve(Engine.clone(start));
   if (!r.ok) {
     failed++;
     console.log(`✘ ${String(level.id).padStart(2)} ${level.name} — ${r.reason}`);
     continue;
   }
+  // 함정: 블록을 바로 자리에 맞추는 첫 수 중 더는 풀 수 없게 되는 것
+  const fits = Engine.moves(start).filter((m) => Engine.matchingTarget(start, start.blocks[m.id], m.x, m.y));
+  const traps = fits.filter((m) => {
+    const n = Engine.clone(start);
+    Engine.apply(n, m);
+    return !Engine.solve(n).ok;
+  });
+  const problems = [];
   if (level.par !== r.path.length) problems.push(`par=${level.par} 인데 최소 ${r.path.length}수`);
-  let word = '';
-  if (level.word) {
-    const w = Engine.solve(Engine.clone(start), { needWord: true });
-    if (!w.ok) problems.push(`「${level.word}」 순서대로 불가`);
-    else word = ` · 「${level.word}」 ${w.path.length}수`;
-    if (showPath && w.ok) word += '\n     단어: ' + fmt(level, w);
-  }
   if (problems.length) failed++;
-  console.log(`${problems.length ? '✘' : '✔'} ${String(level.id).padStart(2)} ${level.emoji || ''} ${level.name} 최소 ${r.path.length}수${word}${problems.length ? '  ⚠ ' + problems.join(', ') : ''}`);
-  if (showPath) console.log('     최소: ' + fmt(level, r));
+  const people = start.people.length;
+  console.log(`${problems.length ? '✘' : '✔'} ${String(level.id).padStart(2)} ${level.name.padEnd(8)} 최소 ${r.path.length}수 · 백성 ${people}명 · 함정 ${traps.length}/${fits.length}${problems.length ? '  ⚠ ' + problems.join(', ') : ''}`);
+  if (showPath) console.log('     ' + r.path.map((m) => `${start.blocks[m.id].v}→(${m.x},${m.y})`).join('  '));
 }
 process.exit(failed ? 1 : 0);

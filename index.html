@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>자모냥</title>
-  <meta name="description" content="한글 자음·모음으로 만드는 슬라이딩 블록 퍼즐" />
+  <title>백성을 구해라</title>
+  <meta name="description" content="문종이 되어 자음·모음 모양 지붕으로 비 맞는 백성을 지키는 한글 퍼즐" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=Jua&display=swap" rel="stylesheet" />
@@ -12,17 +12,18 @@
 </head>
 <body>
   <div id="app">
-    <!-- 타이틀 / 레벨 선택 -->
+    <!-- 첫 화면 / 단계 고르기 -->
     <section id="menu" class="screen">
       <header class="title">
-        <h1>자모냥</h1>
-        <p>모음 블록을 밀어서 같은 색 자음을 만나면 글자가 돼요</p>
+        <svg class="portrait big" viewBox="0 0 80 80" aria-hidden="true"><use href="#munjong" /></svg>
+        <h1>백성을 구해라</h1>
+        <p>비가 와요! 문종 임금님이 되어 자음·모음 모양 지붕으로 백성을 지켜 주세요.</p>
       </header>
       <div id="worlds"></div>
       <details class="legend">
-        <summary>보호자용 · 색 규칙 (훈민정음 오음)</summary>
-        <ul id="legendList"></ul>
-        <p class="small">세로 모음(ㅣㅏㅓㅑㅕ)은 위아래로, 가로 모음(ㅡㅗㅜㅛㅠ)은 옆으로만 움직여요. 자음이나 모음을 누르면 이름을 읽어 줘요.</p>
+        <summary>보호자용 안내</summary>
+        <p class="small">문종(1414~1452)은 세종의 맏아들로, 세자 시절 비의 양을 재는 측우기를 만들었어요. 아이는 자음·모음 모양을 같은 모양 자리와 맞춰 보며 글자 생김새를 익히고, 블록을 잡을 때마다 이름(기역, 아…)을 듣습니다.</p>
+        <p class="small">블록은 손가락으로 끌면 바위를 피해 한 칸씩 따라와요. 자리 근처에 놓으면 저절로 쏙 들어갑니다. 지붕이 된 블록은 움직이지 않으니, 막히면 되돌리기를 눌러요.</p>
       </details>
     </section>
 
@@ -37,15 +38,15 @@
         <button id="restartBtn" class="icon-btn" aria-label="처음부터">↻</button>
         <button id="soundBtn" class="icon-btn" aria-label="소리 켜기/끄기">🔊</button>
       </div>
-      <button id="target" class="target" aria-label="단어 듣기">
-        <span id="targetEmoji" class="emoji"></span>
-        <span id="targetSlots" class="slots"></span>
+      <button id="court" class="court" aria-label="다시 듣기">
+        <svg class="portrait" viewBox="0 0 80 80" aria-hidden="true"><use href="#munjong" /></svg>
+        <span class="bubble"><b>신하</b><span id="bubble"></span></span>
       </button>
+      <div class="saved"><span>구한 백성</span><span id="savedIcons"></span></div>
       <div id="boardWrap">
         <canvas id="board"></canvas>
         <div id="toast" class="toast"></div>
       </div>
-      <p id="tip" class="tip"></p>
       <div class="helpers">
         <button id="undoBtn" class="helper">↩<span>되돌리기</span></button>
         <button id="hintBtn" class="helper">💡<span>힌트</span></button>
@@ -66,6 +67,27 @@
       </div>
     </div>
   </div>
+
+  <!-- 문종 초상: 익선관과 곤룡포 -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <g id="munjong">
+        <path d="M10 80 Q12 56 40 54 Q68 56 70 80 Z" fill="#b8322a" />
+        <path d="M32 55 L40 66 L48 55" fill="none" stroke="#f3e6c8" stroke-width="3" />
+        <circle cx="40" cy="70" r="7" fill="#e2a72e" stroke="#93650d" stroke-width="1.5" />
+        <path d="M37 70 q3 -4 6 0 q-3 4 -6 0" fill="#93650d" />
+        <circle cx="40" cy="38" r="15" fill="#f4d3b0" />
+        <ellipse cx="22" cy="15" rx="8" ry="5.5" transform="rotate(-25 22 15)" fill="#1d1d1d" />
+        <ellipse cx="58" cy="15" rx="8" ry="5.5" transform="rotate(25 58 15)" fill="#1d1d1d" />
+        <path d="M24 30 Q24 12 40 12 Q56 12 56 30 Z" fill="#1d1d1d" />
+        <rect x="23" y="27" width="34" height="5" rx="2" fill="#2b2b2b" />
+        <circle cx="34" cy="38" r="1.8" fill="#2a1d13" />
+        <circle cx="46" cy="38" r="1.8" fill="#2a1d13" />
+        <path d="M34 47 q6 4 12 0" fill="none" stroke="#2a1d13" stroke-width="1.6" stroke-linecap="round" />
+        <path d="M33 44 q3.5 -2 7 0 q3.5 -2 7 0" fill="none" stroke="#2a1d13" stroke-width="1.4" />
+      </g>
+    </defs>
+  </svg>
 
   <script src="js/hangul.js"></script>
   <script src="js/engine.js"></script>
