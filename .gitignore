@@ -5,3 +5,4 @@ android
 ios
 .superpowers/
 *.tsbuildinfo
+playwright-report
