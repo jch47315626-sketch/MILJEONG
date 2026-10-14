@@ -31,6 +31,10 @@
 python3 -m http.server 8000   # 그리고 http://localhost:8000
 ```
 
+## 자모 모양 점검
+
+주소 끝에 `#atlas`를 붙여 열면(예: `http://localhost:8000/#atlas`) 40개 블록을 한 판에서 볼 수 있어요.
+
 ## 단계 검증
 
 ```bash
@@ -42,10 +46,11 @@ node tools/solve.js 10 --path
 
 | 파일 | 역할 |
 |---|---|
-| `js/hangul.js` | 자모 블록 모양(격자), 이름(읽기용), 단청 색 |
+| `js/hangul.js` | 자모 40개(자음 19 · 모음 21) 블록 모양(격자 그림), 이름(읽기용), 단청 색 |
 | `js/engine.js` | 규칙 엔진 + BFS 솔버 (브라우저 힌트·Node 검증 공용) |
-| `js/levels.js` | 10단계 (첫 비 · 장마 · 큰비) |
+| `js/levels.js` | 26단계 (첫 비 · 장마 · 큰비 · 모음 마을 · 자음 마을 · 쌍둥이 마을 · 겹모음 마을) |
 | `js/game.js` | Canvas 렌더링, 드래그, 음성, 힌트/되돌리기, 저장 |
-| `tools/solve.js` | 단계 검증 |
+| `tools/solve.js` | 단계 검증 + 자모 40개가 모두 나오는지 확인 |
+| `tools/gen-levels.js` | 글자 목록으로 단계를 무작위 배치하고 솔버로 골라 주는 생성기 (11~26단계) |
 
 이전 버전(모음+자음 결합 퍼즐 「자모냥」)은 git 기록에 있고, 원래 기획서는 [docs/기획서.md](docs/기획서.md)입니다.

@@ -3,7 +3,7 @@
 (function () {
   const { Jamo, Engine, LEVELS } = window;
   const $ = (id) => document.getElementById(id);
-  const WORLD_NAMES = { 1: '첫 비', 2: '장마', 3: '큰비' };
+  const WORLD_NAMES = { 1: '첫 비', 2: '장마', 3: '큰비', 4: '모음 마을', 5: '자음 마을', 6: '쌍둥이 마을', 7: '겹모음 마을' };
 
   // ── 진행 저장 (브라우저 저장소가 막혀 있어도 동작) ──
   const SAVE_KEY = 'baekseong.v1';
@@ -453,6 +453,17 @@
       else ctx.rect(px + inset, py + inset, cs - inset * 2, cs - inset * 2);
       if (set.has(x + 1 + ',' + y)) ctx.rect(px + cs / 2, py + inset, cs, cs - inset * 2);
       if (set.has(x + ',' + (y + 1))) ctx.rect(px + inset, py + cs / 2, cs - inset * 2, cs);
+      // 대각선으로만 이웃한 칸은 비스듬한 띠로 잇는다 (ㅅ ㅈ ㅊ ㅇ ㅎ)
+      for (const dx of [-1, 1]) {
+        if (!set.has(x + dx + ',' + (y + 1)) || set.has(x + dx + ',' + y) || set.has(x + ',' + (y + 1))) continue;
+        const ax = px + cs / 2, ay = py + cs / 2, bx = ax + dx * cs, by = ay + cs;
+        const hw = (cs - inset * 2) * 0.36 / Math.SQRT2;
+        ctx.moveTo(ax + hw, ay - dx * hw);
+        ctx.lineTo(bx + hw, by - dx * hw);
+        ctx.lineTo(bx - hw, by + dx * hw);
+        ctx.lineTo(ax - hw, ay + dx * hw);
+        ctx.closePath();
+      }
     }
   }
   function drawShape(cells, { fill, inset = cs * 0.08 }) {
@@ -742,7 +753,19 @@
     requestAnimationFrame(loop);
   }
 
-  showMenu();
+  // 점검용: 주소 끝에 #atlas를 붙이면 모든 자모 블록을 한 판에 늘어놓는다
+  function showAtlas() {
+    const letters = [...Jamo.CONSONANTS, ...Jamo.VOWELS];
+    const per = 5, cw = 8, ch = 6;
+    const rows = Math.ceil(letters.length / per);
+    const pos = letters.map((v, i) => [(i % per) * cw, Math.floor(i / per) * ch]);
+    const map = Array.from({ length: rows * ch }, () => '.'.repeat(per * cw));
+    LEVELS.push({ id: 999, world: 1, name: '자모 모양 점검', par: 0, say: '모든 자모 블록',
+      map, targets: letters.map((v, i) => ({ v, pos: pos[i] })), blocks: letters.map((v, i) => ({ v, pos: pos[i] })) });
+    startLevel(999);
+  }
+
+  if (location.hash === '#atlas') showAtlas(); else showMenu();
   requestAnimationFrame(loop);
 
   // 테스트용

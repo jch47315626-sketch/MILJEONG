@@ -42,4 +42,9 @@ for (const level of LEVELS) {
   console.log(`${problems.length ? '✘' : '✔'} ${String(level.id).padStart(2)} ${level.name.padEnd(8)} 최소 ${r.path.length}수 · 백성 ${people}명 · 함정 ${traps.length}/${fits.length}${problems.length ? '  ⚠ ' + problems.join(', ') : ''}`);
   if (showPath) console.log('     ' + r.path.map((m) => `${start.blocks[m.id].v}→(${m.x},${m.y})`).join('  '));
 }
+// 모든 자음·모음이 어느 단계엔가 한 번은 나오는지
+const used = new Set(LEVELS.flatMap((l) => l.blocks.map((b) => b.v)));
+const missing = [...globalThis.Jamo.CONSONANTS, ...globalThis.Jamo.VOWELS].filter((v) => !used.has(v));
+if (missing.length) { failed++; console.log(`✘ 단계에 안 나오는 자모: ${missing.join(' ')}`); }
+else console.log(`✔ 자모 ${globalThis.Jamo.CONSONANTS.length + globalThis.Jamo.VOWELS.length}개 모두 나옴`);
 process.exit(failed ? 1 : 0);
