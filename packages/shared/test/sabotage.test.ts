@@ -81,19 +81,58 @@ test('cooldown 40s shared, one active at a time, fighter → WRONG_ROLE', () => 
   expect(sab(sp.id, ready + 3)).toEqual({ ok: false, reason: 'WRONG_PHASE' });
 });
 
-test('player standing on passage tile when checkpoint starts can still move off it', () => {
+function startCheckpoint(s: ReturnType<typeof setup>['s'], spId: string, id: string) {
+  expect(applyIntent(s, spId, { t: 'sabotage', kind: 'checkpoint', passageId: id }, ready).ok).toBe(true);
+}
+const run = (s: ReturnType<typeof setup>['s'], n: number, from = ready) => {
+  for (let i = 0; i < n; i++) tick(s, from + i * 100, 100);
+};
+
+test('player in doorway at checkpoint start is displaced fully to their own side', () => {
+  const { s, sp, f1, f2 } = setup();
+  const pas = s.map.passages[0];
+  const row = pas.tiles[0].y;
+  const x = pas.tiles[0].x + 0.5;
+  placeAt(s, f1.id, { x, y: row + 0.3 }); // north half
+  placeAt(s, f2.id, { x, y: row + 0.8 }); // south half
+  startCheckpoint(s, sp.id, pas.id);
+  expect(f1.pos.y + 0.3).toBeLessThanOrEqual(row);
+  expect(f2.pos.y - 0.3).toBeGreaterThanOrEqual(row + 1);
+});
+
+test('doorway player holding toward far side never crosses the blocked row', () => {
   const { s, sp, f1 } = setup();
   const pas = s.map.passages[0];
-  const t0 = pas.tiles[0];
-  placeAt(s, f1.id, { x: t0.x + 0.5, y: t0.y + 0.5 });
-  applyIntent(s, sp.id, { t: 'sabotage', kind: 'checkpoint', passageId: pas.id }, ready);
-  f1.dir = { x: 0, y: -1 };
-  for (let i = 0; i < 6; i++) tick(s, ready + i * 100, 100);
-  expect(f1.pos.y).toBeLessThan(t0.y + 0.5);
-  // ...and once clear of the passage it cannot re-enter it
-  const y1 = f1.pos.y;
+  const row = pas.tiles[0].y;
+  placeAt(s, f1.id, { x: pas.tiles[0].x + 0.5, y: row + 0.5 });
+  startCheckpoint(s, sp.id, pas.id);
   f1.dir = { x: 0, y: 1 };
-  for (let i = 0; i < 30; i++) tick(s, ready + 1000 + i * 100, 100);
-  expect(f1.pos.y).toBeLessThanOrEqual(t0.y + 0.5);
-  expect(y1).toBeLessThan(t0.y + 0.5);
+  for (let i = 0; i < 10; i++) {
+    tick(s, ready + i * 100, 100);
+    expect(f1.pos.y).toBeLessThanOrEqual(row - 0.3 + 1e-9);
+  }
+});
+
+test('half-stepped-off player turning around cannot cross', () => {
+  const { s, sp, f1 } = setup();
+  const pas = s.map.passages[0];
+  const row = pas.tiles[0].y;
+  placeAt(s, f1.id, { x: pas.tiles[0].x + 0.5, y: row + 1.1 }); // south, footprint still touches row
+  startCheckpoint(s, sp.id, pas.id);
+  f1.dir = { x: 0, y: -1 };
+  run(s, 10);
+  expect(f1.pos.y).toBeGreaterThanOrEqual(row + 1.3 - 1e-9);
+});
+
+test('ghost in doorway is not displaced and can pass', () => {
+  const { s, sp, f1 } = setup();
+  const pas = s.map.passages[0];
+  const row = pas.tiles[0].y;
+  f1.alive = false;
+  placeAt(s, f1.id, { x: pas.tiles[0].x + 0.5, y: row + 0.5 });
+  startCheckpoint(s, sp.id, pas.id);
+  expect(f1.pos).toEqual({ x: pas.tiles[0].x + 0.5, y: row + 0.5 });
+  f1.dir = { x: 0, y: -1 };
+  run(s, 10);
+  expect(f1.pos.y).toBeLessThan(row - 0.3);
 });
