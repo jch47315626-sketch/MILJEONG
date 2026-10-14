@@ -5,3 +5,7 @@ export * from './roles';
 export * from './map/types';
 export { MAP, isWalkable, zoneAt } from './map/map';
 export * from './geometry';
+export * from './game';
+export * from './tasks';
+export * from './tick';
+export * from './actions';
