@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { GameEvent, Intent, PlayerView } from '@miljeong/shared';
+import { MAP, type GameEvent, type Intent, type PlayerView } from '@miljeong/shared';
 import { S } from '../src/strings';
 
 const destroy = vi.fn();
@@ -50,6 +50,16 @@ describe('game screen', () => {
     eventsCb!([{ e: 'informed', victim: 'me' }]);
     expect(toast.hidden).toBe(false);
     expect(toast.textContent).toBe(S.game.notice.informed);
+    // opening a mini-game stops movement right away (zero dir sent on open)
+    const spot = MAP.taskSpots[0];
+    const atTask = view();
+    atTask.me = { ...atTask.me, pos: { ...spot.pos }, tasks: [{ taskId: spot.id, type: spot.type, done: false, startedAt: null }] };
+    viewCb!(atTask);
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyD' }));
+    expect(sent.at(-1)).toEqual({ t: 'move', dir: { x: 1, y: 0 } });
+    (root.querySelector('[data-testid="btn-task"]') as HTMLButtonElement).click();
+    expect(sent.at(-2)).toEqual({ t: 'taskStart', taskId: spot.id });
+    expect(sent.at(-1)).toEqual({ t: 'move', dir: { x: 0, y: 0 } });
     cleanup();
     expect(offEv).toHaveBeenCalledTimes(1);
     expect(offView).toHaveBeenCalledTimes(1);

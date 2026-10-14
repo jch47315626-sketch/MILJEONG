@@ -1,8 +1,13 @@
 import { MAP, createRng, type Intent, type MapData, type PlayerView, type Rng } from '@miljeong/shared';
+import { activeConfig } from '../game/input';
 import { openMiniGame } from '../minigames';
 
-/** Server rejects taskComplete earlier than this after taskStart (config.taskMinMs). */
-export const TASK_MIN_MS = 1500;
+/**
+ * Extra wait on top of config.taskMinMs before sending taskComplete: the server
+ * measures from when taskStart *arrived*, so network jitter could otherwise make
+ * an early finish arrive too soon (TOO_FAST).
+ */
+export const TASK_COMPLETE_MARGIN_MS = 200;
 
 export interface TaskControllerDeps {
   parent: HTMLElement;
@@ -13,6 +18,8 @@ export interface TaskControllerDeps {
   onOpenChange?(open: boolean): void;
   map?: MapData;
   rng?: Rng;
+  /** server's minimum task duration; defaults to activeConfig().taskMinMs */
+  minMs?: number;
 }
 
 export interface TaskController {
@@ -29,6 +36,7 @@ export interface TaskController {
 
 export function createTaskController(deps: TaskControllerDeps): TaskController {
   const map = deps.map ?? MAP;
+  const minMs = deps.minMs ?? activeConfig().taskMinMs;
   let closer: (() => void) | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let wasAlive: boolean | null = null;
@@ -55,7 +63,6 @@ export function createTaskController(deps: TaskControllerDeps): TaskController {
       sent = true;
     }
     wasAlive = view.me.alive;
-    deps.onOpenChange?.(true);
     closer = openMiniGame(spot.type, deps.parent, {
       rng: deps.rng ?? createRng((Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0),
       onClose: close,
@@ -68,11 +75,13 @@ export function createTaskController(deps: TaskControllerDeps): TaskController {
           deps.send({ t: 'taskComplete', taskId });
           close();
         };
-        const wait = TASK_MIN_MS - (Date.now() - openedAt);
+        const wait = minMs + TASK_COMPLETE_MARGIN_MS - (Date.now() - openedAt);
         if (wait <= 0) finish();
         else timer = setTimeout(finish, wait);
       },
     });
+    // notify only once `closer` is set, so listeners already see isOpen() === true
+    deps.onOpenChange?.(true);
   }
 
   return {

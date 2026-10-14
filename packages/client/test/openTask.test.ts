@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { MAP, createRng, type Intent, type PlayerView } from '@miljeong/shared';
-import { createTaskController, TASK_MIN_MS } from '../src/ui/openTask';
+import { createTaskController, TASK_COMPLETE_MARGIN_MS } from '../src/ui/openTask';
+import { activeConfig } from '../src/game/input';
 import { createHud } from '../src/ui/hud';
 import { KeyboardInput } from '../src/game/input';
 
+const TASK_MIN_MS = activeConfig().taskMinMs;
 const spot = MAP.taskSpots.find((s) => s.type === 'mimeograph')!;
 
 function view(role: 'fighter' | 'spy', over: Partial<PlayerView> = {}, alive = true): PlayerView {
@@ -31,7 +33,22 @@ describe('task controller', () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  test('fighter: taskStart, early finish waits until 1500ms then taskComplete', () => {
+  test('margin is 200ms and the minimum comes from activeConfig().taskMinMs', () => {
+    expect(TASK_COMPLETE_MARGIN_MS).toBe(200);
+    expect(activeConfig().taskMinMs).toBe(1500);
+  });
+
+  test('custom minMs is honoured (plus the margin)', () => {
+    const c = createTaskController({ parent: host, send: (i) => sent.push(i), rng: createRng(1), minMs: 3000 });
+    c.open(spot.id, view('fighter'));
+    tapAll(host);
+    vi.advanceTimersByTime(3000 + TASK_COMPLETE_MARGIN_MS - 1);
+    expect(sent).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(sent[1]).toEqual({ t: 'taskComplete', taskId: spot.id });
+  });
+
+  test('fighter: taskStart, early finish waits until taskMinMs + margin then taskComplete', () => {
     ctl.open(spot.id, view('fighter'));
     expect(sent).toEqual([{ t: 'taskStart', taskId: spot.id }]);
     expect(q(host, 'minigame-mimeograph')).not.toBeNull();
@@ -39,7 +56,7 @@ describe('task controller', () => {
     tapAll(host);
     expect(sent).toHaveLength(1);
     expect(q(host, 'minigame-status')!.hidden).toBe(false);
-    vi.advanceTimersByTime(TASK_MIN_MS - 400 - 1);
+    vi.advanceTimersByTime(TASK_MIN_MS + TASK_COMPLETE_MARGIN_MS - 400 - 1);
     expect(sent).toHaveLength(1);
     vi.advanceTimersByTime(1);
     expect(sent[1]).toEqual({ t: 'taskComplete', taskId: spot.id });
@@ -47,9 +64,9 @@ describe('task controller', () => {
     expect(ctl.isOpen()).toBe(false);
   });
 
-  test('finishing after 1500ms sends taskComplete immediately', () => {
+  test('finishing after taskMinMs + margin sends taskComplete immediately', () => {
     ctl.open(spot.id, view('fighter'));
-    vi.advanceTimersByTime(2000);
+    vi.advanceTimersByTime(TASK_MIN_MS + TASK_COMPLETE_MARGIN_MS);
     tapAll(host);
     expect(sent[1]).toEqual({ t: 'taskComplete', taskId: spot.id });
   });
@@ -102,12 +119,16 @@ describe('hud + keyboard integration', () => {
   test('hud task button opens the modal, rejection toasts and closes, keys ignored while open', () => {
     const host = document.createElement('div');
     const sent: Intent[] = [];
-    const changes: boolean[] = [];
-    const hud = createHud(host, { send: (i) => sent.push(i), onTaskOpenChange: (o) => changes.push(o) });
+    const changes: [boolean, boolean][] = [];
+    // record isOpen at notification time: the listener must already see the new state
+    const hud: ReturnType<typeof createHud> = createHud(host, {
+      send: (i) => sent.push(i),
+      onTaskOpenChange: (o) => changes.push([o, hud.taskOpen()]),
+    });
     hud.update(view('fighter'));
     q(host, 'btn-task')!.click();
     expect(hud.taskOpen()).toBe(true);
-    expect(changes).toEqual([true]);
+    expect(changes).toEqual([[true, true]]);
 
     let moved = 0;
     const kb = new KeyboardInput(() => moved++, () => {}, () => hud.taskOpen());

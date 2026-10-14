@@ -85,6 +85,7 @@ export function createHud(parent: HTMLElement, deps: HudDeps): Hud {
     parent: root,
     send: (i) => deps.send(i),
     map,
+    minMs: config.taskMinMs,
     onOpenChange: (o) => deps.onTaskOpenChange?.(o),
   });
 

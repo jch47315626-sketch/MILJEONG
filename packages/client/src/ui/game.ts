@@ -38,6 +38,8 @@ export function render(root: HTMLElement, ctx: ScreenCtx): () => void {
   let game: { destroy(): void } | null = null;
 
   const refresh = (): void => {
+    // cleanup closes an open mini-game, whose close callback lands here: send nothing then
+    if (disposed) return;
     // stop sending movement outside live play (meeting, ejection, ended)
     const playing = store.view?.phase === 'playing' && !hud.taskOpen();
     mover.set(playing ? inputToDir(keyboard.keys, stick) : { x: 0, y: 0 });
