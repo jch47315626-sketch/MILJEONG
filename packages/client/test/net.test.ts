@@ -101,6 +101,21 @@ describe('Connection', () => {
   });
 });
 
+describe('Connection emit', () => {
+  test('a listener unsubscribing itself during emit does not skip the next listener', async () => {
+    const c = await Connection.create('a');
+    const got: string[] = [];
+    const off = c.onView(() => {
+      got.push('first');
+      off();
+    });
+    c.onView(() => got.push('second'));
+    handlers.get('view')!({});
+    handlers.get('view')!({});
+    expect(got).toEqual(['first', 'second', 'second']);
+  });
+});
+
 describe('isUnexpectedLeave', () => {
   test('classifies close codes', () => {
     expect(isUnexpectedLeave(1000, false)).toBe(false);

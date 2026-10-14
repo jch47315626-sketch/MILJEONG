@@ -3,7 +3,8 @@ import { isUnexpectedLeave, type Connection } from './net';
 import { S } from './strings';
 import * as title from './ui/title';
 import * as lobby from './ui/lobby';
-import { renderGame, renderResult } from './ui/placeholder';
+import * as game from './ui/game';
+import { renderResult } from './ui/placeholder';
 
 export type Screen = 'title' | 'lobby' | 'game' | 'result';
 
@@ -59,7 +60,7 @@ const ctx: ScreenCtx = {
 const screens: Record<Screen, (root: HTMLElement, ctx: ScreenCtx) => () => void> = {
   title: title.render,
   lobby: lobby.render,
-  game: renderGame,
+  game: game.render,
   result: renderResult,
 };
 

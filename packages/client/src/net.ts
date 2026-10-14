@@ -54,6 +54,11 @@ export function serverUrl(): string {
 
 type Cb<T> = (msg: T) => void;
 
+/** Iterates a copy: a callback may unsubscribe (splice) while the list is being walked. */
+function emit<T>(list: Cb<T>[], msg: T): void {
+  for (const cb of [...list]) cb(msg);
+}
+
 export class Connection {
   readonly code: string;
   readonly myId: string;
@@ -73,16 +78,16 @@ export class Connection {
     // register synchronously, before anything is awaited, so no early message is lost
     room.onMessage('lobby', (m: LobbyMsg) => {
       this.lastLobby = m;
-      this.lobbyCbs.forEach((cb) => cb(m));
+      emit(this.lobbyCbs, m);
     });
     room.onMessage('view', (m: PlayerView) => {
       this.lastView = m;
-      this.viewCbs.forEach((cb) => cb(m));
+      emit(this.viewCbs, m);
     });
-    room.onMessage('events', (m: GameEvent[]) => this.eventsCbs.forEach((cb) => cb(m)));
-    room.onMessage('rejected', (m: { reason: RejectReason }) => this.rejectedCbs.forEach((cb) => cb(m)));
-    room.onMessage('error', (m: { code: RoomErrorCode }) => this.errorCbs.forEach((cb) => cb(m)));
-    room.onLeave((code: number) => this.leaveCbs.forEach((cb) => cb(code)));
+    room.onMessage('events', (m: GameEvent[]) => emit(this.eventsCbs, m));
+    room.onMessage('rejected', (m: { reason: RejectReason }) => emit(this.rejectedCbs, m));
+    room.onMessage('error', (m: { code: RoomErrorCode }) => emit(this.errorCbs, m));
+    room.onLeave((code: number) => emit(this.leaveCbs, code));
   }
 
   private static client(): Client {

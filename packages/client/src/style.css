@@ -25,3 +25,34 @@ hr { width: 100%; border: 0; border-top: 1px solid #2c3140; margin: 8px 0; }
 .players li { background: var(--panel); border-radius: 10px; padding: 12px 16px; display: flex; gap: 8px; align-items: center; }
 .tag { margin-left: auto; font-size: 12px; color: var(--accent); }
 .tag + .tag { margin-left: 0; }
+
+/* ---- game screen ---- */
+.game-screen { position: fixed; inset: 0; overflow: hidden; background: #0b0906; touch-action: none; user-select: none; -webkit-user-select: none; }
+.game-canvas { position: absolute; inset: 0; }
+.game-canvas canvas { display: block; }
+.hud { position: absolute; inset: 0; pointer-events: none; font-size: 14px; }
+.hud > * { pointer-events: auto; }
+.hud-top { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; max-width: 360px; }
+.hud-top > * { pointer-events: auto; }
+.hud-gauge { position: relative; height: 18px; border-radius: 9px; background: rgba(0,0,0,0.6); border: 1px solid #5a4a30; overflow: hidden; }
+.hud-gauge-fill { height: 100%; background: var(--accent); width: 0; transition: width 0.2s; }
+.hud-gauge-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; text-shadow: 0 0 3px #000; }
+.hud-tasks { list-style: none; margin: 0; padding: 6px 10px; background: rgba(0,0,0,0.55); border-radius: 8px; display: flex; flex-direction: column; gap: 2px; }
+.hud-tasks li.done { color: var(--muted); text-decoration: line-through; }
+.hud-tasks li.ghost, .hud-tasks li.spy { color: var(--muted); }
+.hud-actions { position: absolute; right: 12px; bottom: 12px; display: grid; grid-template-columns: repeat(2, auto); gap: 8px; justify-items: stretch; }
+.hud-actions button { min-width: 84px; min-height: 52px; background: rgba(31,35,45,0.92); font-weight: 700; }
+.hud-actions button:not(:disabled) { border-color: var(--accent); }
+.hud-menu { position: absolute; right: 12px; bottom: 150px; max-height: 50dvh; overflow: auto; display: flex; flex-direction: column; gap: 6px; padding: 8px; background: rgba(0,0,0,0.85); border-radius: 10px; }
+.hud-menu[hidden] { display: none; }
+.hud-menu button { min-height: 40px; }
+.hud-toast { position: absolute; left: 50%; top: 40%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 8px 16px; border-radius: 20px; color: var(--danger); pointer-events: none; }
+.hud-toast[hidden] { display: none; }
+.hud-debug { position: absolute; left: 8px; bottom: 8px; font-size: 10px; color: transparent; pointer-events: none; }
+.joystick { position: absolute; left: 20px; bottom: 20px; width: 128px; height: 128px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.25); touch-action: none; }
+.joystick-knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: rgba(232,176,74,0.7); pointer-events: none; }
+.role-reveal { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(8,6,3,0.94); text-align: center; }
+.role-reveal h2 { font-size: 56px; margin: 0; letter-spacing: 0.1em; }
+.role-reveal.spy h2 { color: var(--danger); }
+.role-reveal.fighter h2 { color: var(--accent); }
+.role-reveal p { margin: 0; color: var(--muted); }

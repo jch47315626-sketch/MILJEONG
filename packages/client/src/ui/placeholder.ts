@@ -9,5 +9,4 @@ function placeholder(testid: string, text: string) {
     return () => {};
   };
 }
-export const renderGame = placeholder('game-screen', S.game);
 export const renderResult = placeholder('result-screen', S.result);
