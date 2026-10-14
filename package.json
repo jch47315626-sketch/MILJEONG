@@ -6,6 +6,10 @@
   ],
   "scripts": {
     "test": "npm test -ws --if-present",
-    "typecheck": "tsc -b packages/shared packages/server"
+    "typecheck": "tsc -b packages/shared packages/server packages/client",
+    "dev": "concurrently -k -n server,client -c blue,green \"npm start -w packages/server\" \"npm run dev -w packages/client\""
+  },
+  "devDependencies": {
+    "concurrently": "10.0.6"
   }
 }
