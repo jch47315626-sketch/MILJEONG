@@ -62,6 +62,9 @@ export const FAST_CONFIG: GameConfig = {
   sabotageCooldownMs: 2000,
 };
 
+/** Max messages kept (and sent in a view) per chat list; older ones are dropped. */
+export const CHAT_HISTORY_MAX = 50;
+
 /** Number of spies for a given player count: 4~6 -> 1, 7~10 -> 2. */
 export function spyCountFor(n: number): 1 | 2 {
   return n >= 7 ? 2 : 1;

@@ -77,6 +77,8 @@ export function resolveMeeting(state: GameState, now: number): GameEvent[] {
   state.phase = 'ejecting';
   state.ejectingEndsAt = now + state.config.ejectingMs;
   state.meeting = null;
+  // the discussion is over: stop sending it in every view
+  state.meetingChat = [];
   const events: GameEvent[] = [{ e: 'ejected', ejection }];
   events.push(...endIfWon(state));
   return events;

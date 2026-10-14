@@ -1,3 +1,4 @@
+import { CHAT_HISTORY_MAX } from './config';
 import { dist } from './geometry';
 import type { Vec } from './map/types';
 import { taskGauge } from './tasks';
@@ -134,7 +135,7 @@ export function viewFor(state: GameState, playerId: string, now: number): Player
 
   const m = state.meeting;
   const copyChat = (list: ChatMsg[]): ChatMsg[] =>
-    list.map((c) => ({ from: c.from, text: c.text, at: c.at }));
+    list.slice(-CHAT_HISTORY_MAX).map((c) => ({ from: c.from, text: c.text, at: c.at }));
 
   return {
     phase: state.phase,
