@@ -31,7 +31,7 @@ function fakeRoom() {
   };
 }
 
-import { Connection } from '../src/net';
+import { Connection, isUnexpectedLeave } from '../src/net';
 
 afterEach(() => {
   handlers.clear();
@@ -74,5 +74,40 @@ describe('Connection', () => {
     handlers.get('error')!({ code: 'NOT_HOST' });
     leaveHandler!(1006);
     expect(got).toEqual([['ev', [{ e: 'x' }]], ['rej', { reason: 'COOLDOWN' }], ['err', { code: 'NOT_HOST' }], ['leave', 1006]]);
+  });
+
+  test('unsubscribed callbacks no longer fire', async () => {
+    const c = await Connection.create('a');
+    const got: string[] = [];
+    const offs = [
+      c.onLobby(() => got.push('lobby')),
+      c.onView(() => got.push('view')),
+      c.onEvents(() => got.push('events')),
+      c.onRejected(() => got.push('rejected')),
+      c.onError(() => got.push('error')),
+      c.onLeave(() => got.push('leave')),
+    ];
+    const keep = vi.fn();
+    c.onLobby(keep);
+    offs.forEach((off) => off());
+    handlers.get('lobby')!({});
+    handlers.get('view')!({});
+    handlers.get('events')!([]);
+    handlers.get('rejected')!({});
+    handlers.get('error')!({});
+    leaveHandler!(1000);
+    expect(got).toEqual([]);
+    expect(keep).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('isUnexpectedLeave', () => {
+  test('classifies close codes', () => {
+    expect(isUnexpectedLeave(1000, false)).toBe(false);
+    expect(isUnexpectedLeave(4000, false)).toBe(true);
+    expect(isUnexpectedLeave(1006, false)).toBe(true);
+    expect(isUnexpectedLeave(4002, false)).toBe(true);
+    expect(isUnexpectedLeave(4000, true)).toBe(false);
+    expect(isUnexpectedLeave(1006, true)).toBe(false);
   });
 });

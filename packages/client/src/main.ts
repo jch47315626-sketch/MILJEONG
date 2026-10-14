@@ -1,5 +1,5 @@
 import './style.css';
-import type { Connection } from './net';
+import { isUnexpectedLeave, type Connection } from './net';
 import { S } from './strings';
 import * as title from './ui/title';
 import * as lobby from './ui/lobby';
@@ -39,10 +39,8 @@ const ctx: ScreenCtx = {
     });
     conn.onLeave((code) => {
       if (ctx.conn !== conn) return;
-      // 1000 / 4000: normal (consented) close
-      const normal = leaving || code === 1000 || code === 4000;
       ctx.conn = null;
-      ctx.notice = normal ? null : S.err.disconnected;
+      ctx.notice = isUnexpectedLeave(code, leaving) ? S.err.disconnected : null;
       show('title');
     });
     show(conn.lastLobby?.phase === 'inGame' || conn.lastView ? 'game' : 'lobby');

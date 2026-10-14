@@ -43,6 +43,11 @@ export function joinErrorMessage(err: unknown): string {
   return S.err.generic;
 }
 
+/** A leave is unexpected unless we initiated it or the close code is the normal 1000. */
+export function isUnexpectedLeave(code: number, selfInitiated: boolean): boolean {
+  return !selfInitiated && code !== 1000;
+}
+
 export function serverUrl(): string {
   return import.meta.env.VITE_SERVER_URL ?? `ws://${location.hostname}:2567`;
 }
@@ -92,33 +97,33 @@ export class Connection {
     return new Connection(await Connection.client().joinById(normalizeCode(code), { name }));
   }
 
-  onLobby(cb: Cb<LobbyMsg>): void {
-    this.lobbyCbs.push(cb);
-  }
-  onView(cb: Cb<PlayerView>): void {
-    this.viewCbs.push(cb);
-  }
-  onEvents(cb: Cb<GameEvent[]>): void {
-    this.eventsCbs.push(cb);
-  }
-  onRejected(cb: Cb<{ reason: RejectReason }>): void {
-    this.rejectedCbs.push(cb);
-  }
-  onError(cb: Cb<{ code: RoomErrorCode }>): void {
-    this.errorCbs.push(cb);
-  }
-  /** `code` is the WebSocket close code; 1000 is a normal (consented) close. */
-  onLeave(cb: Cb<number>): void {
-    this.leaveCbs.push(cb);
+  private sub<T>(list: Cb<T>[], cb: Cb<T>): () => void {
+    list.push(cb);
+    return () => {
+      const i = list.indexOf(cb);
+      if (i >= 0) list.splice(i, 1);
+    };
   }
 
-  /** Remove all screen-level listeners (keeps the room's own handlers). */
-  clearListeners(): void {
-    this.lobbyCbs = [];
-    this.viewCbs = [];
-    this.eventsCbs = [];
-    this.rejectedCbs = [];
-    this.errorCbs = [];
+  /** Every onX returns an unsubscribe function; screens call it in their cleanup. */
+  onLobby(cb: Cb<LobbyMsg>): () => void {
+    return this.sub(this.lobbyCbs, cb);
+  }
+  onView(cb: Cb<PlayerView>): () => void {
+    return this.sub(this.viewCbs, cb);
+  }
+  onEvents(cb: Cb<GameEvent[]>): () => void {
+    return this.sub(this.eventsCbs, cb);
+  }
+  onRejected(cb: Cb<{ reason: RejectReason }>): () => void {
+    return this.sub(this.rejectedCbs, cb);
+  }
+  onError(cb: Cb<{ code: RoomErrorCode }>): () => void {
+    return this.sub(this.errorCbs, cb);
+  }
+  /** `code` is the WebSocket close code; 1000 is a normal (consented) close. */
+  onLeave(cb: Cb<number>): () => void {
+    return this.sub(this.leaveCbs, cb);
   }
 
   start(): void {

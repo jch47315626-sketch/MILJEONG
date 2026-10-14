@@ -34,8 +34,8 @@ export function render(root: HTMLElement, ctx: ScreenCtx): () => void {
     notice.textContent = !isHost ? S.lobby.waitHost : enough ? '' : S.lobby.needPlayers;
   };
 
-  conn.onLobby(update);
-  conn.onError((e) => {
+  const offLobby = conn.onLobby(update);
+  const offError = conn.onError((e) => {
     error.textContent =
       e.code === 'NOT_HOST' ? S.err.notHost : e.code === 'NOT_ENOUGH_PLAYERS' ? S.err.notEnoughPlayers : '';
   });
@@ -56,5 +56,8 @@ export function render(root: HTMLElement, ctx: ScreenCtx): () => void {
   );
   if (conn.lastLobby) update(conn.lastLobby);
   else start.hidden = true;
-  return () => {};
+  return () => {
+    offLobby();
+    offError();
+  };
 }
