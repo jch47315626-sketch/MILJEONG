@@ -216,6 +216,44 @@ describe('GameRoom', () => {
     }
     await new Promise((r) => setTimeout(r, 1500));
     ps.forEach((p) => p.room.send('intent', { t: 'move', dir: { x: 0, y: 0 } }));
+    await new Promise((r) => setTimeout(r, 150));
+    const byId = new Map(ps.map((p) => [p.room.sessionId, p]));
+    const spies = game.order.filter((id) => game.players[id].role === 'spy');
+    const fighters = game.order.filter((id) => game.players[id].role === 'fighter');
+    // two fighters complete a task each (teleport onto the spot, backdate the start)
+    for (const fid of fighters.slice(0, 2)) {
+      const task = game.players[fid].tasks[0];
+      const spot = game.map.taskSpots.find((t) => t.id === task.taskId)!;
+      game.players[fid].pos = { ...spot.pos };
+      byId.get(fid)!.room.send('intent', { t: 'taskStart', taskId: task.taskId });
+      await waitFor(() => task.startedAt !== null, 5000, 'taskStart');
+      task.startedAt = Date.now() - game.config.taskMinMs - 100;
+      byId.get(fid)!.room.send('intent', { t: 'taskComplete', taskId: task.taskId });
+      await waitFor(() => task.done, 5000, 'taskComplete');
+    }
+    // a spy informs a third fighter
+    const victim = fighters[2];
+    const sp = game.players[spies[0]];
+    game.players[victim].pos = { ...sp.pos };
+    sp.informReadyAt = 0;
+    byId.get(spies[0])!.room.send('intent', { t: 'inform', target: victim });
+    await waitFor(() => !game.players[victim].alive, 5000, 'inform');
+    await new Promise((r) => setTimeout(r, 200));
+    expect(game.phase).toBe('playing');
+    // event delivery: taskDone only to its own player; informed only to spies + victim
+    for (const p of ps) {
+      const me = p.room.sessionId;
+      for (const e of p.events) {
+        if (e.e === 'taskDone') expect(e.player).toBe(me);
+        if (e.e === 'informed') expect(spies.includes(me) || e.victim === me).toBe(true);
+      }
+    }
+    for (const fid of fighters.slice(0, 2)) {
+      expect(byId.get(fid)!.events.filter((e) => e.e === 'taskDone')).toEqual([{ e: 'taskDone', player: fid }]);
+    }
+    for (const id of [...spies, victim]) {
+      expect(byId.get(id)!.events.some((e) => e.e === 'informed' && e.victim === victim)).toBe(true);
+    }
     const fighterProbes = ps.filter((p) => game.players[p.room.sessionId].role === 'fighter');
     expect(fighterProbes.length).toBe(5);
     for (const p of fighterProbes) {
@@ -381,11 +419,23 @@ describe('GameRoom', () => {
     const p = ps[2];
     const id = p.room.sessionId;
     p.room.reconnection.enabled = false;
+    const token = p.room.reconnectionToken;
     await p.room.leave(false);
     await waitFor(() => game.players[id].connected === false);
     // pull the deadline into the past; the tick loop must mark the player left
     game.players[id].disconnectDeadline = Date.now() - 1;
     await waitFor(() => game.players[id].left === true, 5000, 'left by deadline');
+    // ...and the pending Colyseus reconnection must have been rejected
+    await new Promise((r) => setTimeout(r, 100));
+    let reconnected = false;
+    try {
+      open.push(await sdk.reconnect(token));
+      reconnected = true;
+    } catch (e) {
+      expect((e as { code: number }).code).toBe(524);
+    }
+    expect(reconnected).toBe(false);
+    expect(room.clients.getById(id)).toBeUndefined();
   });
 
   test('exception inside tick closes only that room; another room keeps running', async () => {
@@ -409,5 +459,26 @@ describe('GameRoom', () => {
     await new Promise((r) => setTimeout(r, 200));
     expect(b.ps[0].views.length).toBeGreaterThan(before);
     expect(matchMaker.getLocalRoomById(b.code)).toBeDefined();
+  });
+
+  test('exception inside onLeave closes only that room', async () => {
+    const a = await createLobby(2);
+    const b = await createLobby(2);
+    const codes: number[] = [];
+    a.ps[1].room.onLeave((code) => codes.push(code));
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      (a.room as unknown as { lobby: unknown }).lobby = null; // handleLeave will throw
+      await a.ps[0].room.leave(true);
+      await waitFor(() => codes.length > 0, 5000, 'room A closed');
+      expect(codes[0]).toBe(4002);
+      expect(errSpy).toHaveBeenCalled();
+    } finally {
+      errSpy.mockRestore();
+    }
+    await waitFor(() => matchMaker.getLocalRoomById(a.code) === undefined, 5000, 'room A disposed');
+    expect(matchMaker.getLocalRoomById(b.code)).toBeDefined();
+    const late = probe(await sdk.joinById(b.code, { name: 'Late' }));
+    await waitFor(() => late.lobby.at(-1)?.players.length === 3);
   });
 });

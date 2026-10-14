@@ -122,7 +122,25 @@ export class GameRoom extends Room {
 
   /** Non-consented disconnect. In a game: keep the character for the grace period. */
   onDrop(client: Client): void {
-    if (this.crashed) return;
+    this.guard(() => this.handleDrop(client));
+  }
+
+  onReconnect(client: Client): void {
+    this.guard(() => this.handleReconnect(client));
+  }
+
+  /** Effective leave: consented leave, failed reconnection, or a lobby drop. */
+  onLeave(client: Client): void {
+    this.guard(() => this.handleLeave(client));
+  }
+
+  onDispose(): void {
+    activeCodes.delete(this.code);
+  }
+
+  // ---- handlers -------------------------------------------------------------
+
+  private handleDrop(client: Client): void {
     const id = client.sessionId;
     const p = this.game && Object.hasOwn(this.game.players, id) ? this.game.players[id] : undefined;
     if (!this.game || !p || p.left) return; // lobby: onLeave follows
@@ -134,20 +152,17 @@ export class GameRoom extends Room {
     if (typeof (r as Partial<Reconnection>).reject === 'function') this.reconnections.set(id, r);
   }
 
-  onReconnect(client: Client): void {
+  private handleReconnect(client: Client): void {
     const id = client.sessionId;
     this.reconnections.delete(id);
-    if (this.crashed) return;
     if (this.game) markReconnected(this.game, id);
     client.send('lobby', this.lobbyMsg());
   }
 
-  /** Effective leave: consented leave, failed reconnection, or a lobby drop. */
-  onLeave(client: Client): void {
+  private handleLeave(client: Client): void {
     const id = client.sessionId;
     this.reconnections.delete(id);
     this.lastChatAt.delete(id);
-    if (this.crashed) return;
     if (this.game) {
       if (Object.hasOwn(this.game.players, id)) {
         this.broadcastEvents(markLeft(this.game, id, Date.now()));
@@ -160,12 +175,6 @@ export class GameRoom extends Room {
     if (this.hostId === id) this.hostId = this.lobby[0]?.id ?? '';
     if (this.lobby.length !== before) this.broadcastLobby();
   }
-
-  onDispose(): void {
-    activeCodes.delete(this.code);
-  }
-
-  // ---- handlers -------------------------------------------------------------
 
   private handleStart(client: Client): void {
     if (this.game) return;
@@ -261,14 +270,24 @@ export class GameRoom extends Room {
     }
   }
 
-  /** `informed` goes only to the spies and the victim; everything else to all. */
+  /**
+   * Event routing (information hiding):
+   * - `informed` → only the spies and the victim;
+   * - `taskDone` → only the player who did it (only fighters can do tasks, so
+   *   broadcasting it would reveal a role; the gauge reaches everyone via `view`);
+   * - everything else → everyone.
+   */
   private broadcastEvents(events: GameEvent[]): void {
     if (events.length === 0) return;
     const game = this.game;
     for (const client of this.clients) {
       const id = client.sessionId;
       const isSpy = !!game && Object.hasOwn(game.players, id) && game.players[id].role === 'spy';
-      const mine = events.filter((e) => e.e !== 'informed' || isSpy || e.victim === id);
+      const mine = events.filter((e) => {
+        if (e.e === 'informed') return isSpy || e.victim === id;
+        if (e.e === 'taskDone') return e.player === id;
+        return true;
+      });
       if (mine.length > 0) client.send('events', mine);
     }
   }
