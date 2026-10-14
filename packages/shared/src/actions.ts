@@ -1,3 +1,6 @@
+import { applyBell } from './actions/bell';
+import { applyInform } from './actions/inform';
+import { applyReport } from './actions/report';
 import { applyMove } from './actions/move';
 import { applyTaskComplete, applyTaskStart } from './actions/task';
 import type { ApplyResult, GameState, Intent } from './types';
@@ -28,11 +31,15 @@ export function applyIntent(
     case 'taskComplete':
       if (!isStr(i.taskId)) return BAD;
       return applyTaskComplete(state, playerId, i.taskId, now);
+    case 'inform':
+      if (!isStr(i.target)) return BAD;
+      return applyInform(state, playerId, i.target, now);
+    case 'report':
+      return applyReport(state, playerId, now);
+    case 'bell':
+      return applyBell(state, playerId, now);
     // --- Dispatcher branch for intents whose handlers arrive in Tasks 4-8.
     // Plug in by adding a file under src/actions/ and a case above.
-    case 'inform':
-    case 'report':
-    case 'bell':
     case 'sabotage':
     case 'fixBreaker':
     case 'vote':

@@ -9,3 +9,4 @@ export * from './game';
 export * from './tasks';
 export * from './tick';
 export * from './actions';
+export * from './meeting';

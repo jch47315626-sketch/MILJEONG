@@ -1,3 +1,4 @@
+import { getPlayer } from './lookup';
 import { withinRange } from '../geometry';
 import type { ApplyResult, GameState, PlayerState, TaskAssignment } from '../types';
 
@@ -8,7 +9,7 @@ function find(
   playerId: string,
   taskId: string,
 ): Found | { ok: false; reason: 'WRONG_PHASE' | 'NOT_ALIVE' | 'WRONG_ROLE' | 'TARGET_INVALID' } {
-  const p = state.players[playerId];
+  const p = getPlayer(state, playerId);
   if (!p || p.left) return { ok: false, reason: 'NOT_ALIVE' };
   if (state.phase !== 'playing') return { ok: false, reason: 'WRONG_PHASE' };
   if (p.role !== 'fighter') return { ok: false, reason: 'WRONG_ROLE' };
