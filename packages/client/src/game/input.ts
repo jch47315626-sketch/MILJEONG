@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG, dist, type Intent, type MapData, type PlayerView, type Vec } from '@miljeong/shared';
+import { DEFAULT_CONFIG, FAST_CONFIG, dist, type GameConfig, type Intent, type MapData, type PlayerView, type Vec } from '@miljeong/shared';
 
 export interface Keys {
   up: boolean;
@@ -47,6 +47,11 @@ export class MoveSender {
   }
 }
 
+/** E2E builds (VITE_E2E=1) talk to a server running FAST_CONFIG. */
+export function activeConfig() {
+  return import.meta.env.VITE_E2E === '1' ? FAST_CONFIG : DEFAULT_CONFIG;
+}
+
 export interface Actions {
   /** nearest unfinished task id in range, or (spy) any spot in range for camouflage */
   task: string | null;
@@ -59,7 +64,7 @@ export interface Actions {
 }
 
 /** Which action buttons are enabled. A convenience only: the server decides. */
-export function availableActions(view: PlayerView, map: MapData, config = DEFAULT_CONFIG): Actions {
+export function availableActions(view: PlayerView, map: MapData, config: GameConfig = DEFAULT_CONFIG): Actions {
   const { me } = view;
   const out: Actions = { task: null, inform: null, report: false, bell: false, fixBreaker: false, sabotage: false };
   if (view.phase !== 'playing') return out;

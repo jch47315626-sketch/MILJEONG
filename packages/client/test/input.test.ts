@@ -1,6 +1,6 @@
-import { describe, expect, test } from 'vitest';
-import { MAP, DEFAULT_CONFIG, type PlayerView } from '@miljeong/shared';
-import { availableActions, inputToDir, MoveSender, sameDir } from '../src/game/input';
+import { describe, expect, test, vi } from 'vitest';
+import { MAP, DEFAULT_CONFIG, FAST_CONFIG, type PlayerView } from '@miljeong/shared';
+import { KeyboardInput, availableActions, inputToDir, MoveSender, sameDir } from '../src/game/input';
 
 const none = { up: false, down: false, left: false, right: false };
 
@@ -125,6 +125,20 @@ describe('availableActions', () => {
     expect(a.report).toBe(false);
     expect(a.bell).toBe(false);
     expect(a.fixBreaker).toBe(false);
+    // non-vacuous: ghost standing at the bell / at the breaker during a blackout
+    const atBell = view({ startedAt: 0 }, { alive: false, pos: { ...MAP.bell } });
+    expect(availableActions({ ...atBell, now: 100_000 }, MAP).bell).toBe(false);
+    const alive = view({ startedAt: 0 }, { pos: { ...MAP.bell } });
+    expect(availableActions(alive, MAP).bell).toBe(true); // same spot, alive: enabled
+    const atBreaker = view({ sabotage: { kind: 'blackout' } }, { pos: { ...MAP.breaker } });
+    expect(availableActions(atBreaker, MAP).fixBreaker).toBe(true);
+    expect(availableActions(view({ sabotage: { kind: 'blackout' } }, { alive: false, pos: { ...MAP.breaker } }), MAP).fixBreaker).toBe(false);
+  });
+  test('FAST_CONFIG: bell available after 1s', () => {
+    const at = { pos: { x: MAP.bell.x + 1, y: MAP.bell.y } };
+    const v = view({ startedAt: 100_000 - FAST_CONFIG.bellUnlockMs }, at);
+    expect(availableActions(v, MAP).bell).toBe(false);
+    expect(availableActions(v, MAP, FAST_CONFIG).bell).toBe(true);
   });
   test('task: nearest unfinished own task in range; done tasks ignored; spy gets any spot', () => {
     const spot = MAP.taskSpots[0];
@@ -148,5 +162,57 @@ describe('availableActions', () => {
     expect(availableActions(view({ sabotageReadyAt: 100_001 }, spy), MAP).sabotage).toBe(false);
     expect(availableActions(view({ sabotageReadyAt: 0, sabotage: { kind: 'blackout' } }, spy), MAP).sabotage).toBe(false);
     expect(availableActions(view({ sabotageReadyAt: 0 }), MAP).sabotage).toBe(false);
+  });
+});
+
+describe('KeyboardInput', () => {
+  const key = (type: string, code: string, target: EventTarget = window) =>
+    target.dispatchEvent(new KeyboardEvent(type, { code, bubbles: true, cancelable: true }));
+
+  test('tracks keys, fires actions, zeroes on blur and visibilitychange', () => {
+    const onChange = vi.fn();
+    const onAction = vi.fn();
+    const k = new KeyboardInput(onChange, onAction);
+    key('keydown', 'KeyD');
+    expect(k.keys.right).toBe(true);
+    key('keydown', 'KeyQ');
+    expect(onAction).toHaveBeenCalledWith('inform');
+    window.dispatchEvent(new Event('blur'));
+    expect(k.keys.right).toBe(false);
+    key('keydown', 'ArrowUp');
+    expect(k.keys.up).toBe(true);
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    expect(k.keys.up).toBe(false);
+    k.destroy();
+  });
+
+  test('ignores keys typed in inputs', () => {
+    const onChange = vi.fn();
+    const onAction = vi.fn();
+    const k = new KeyboardInput(onChange, onAction);
+    const input = document.createElement('input');
+    document.body.append(input);
+    key('keydown', 'KeyD', input);
+    key('keydown', 'KeyE', input);
+    expect(k.keys.right).toBe(false);
+    expect(onAction).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+    input.remove();
+    k.destroy();
+  });
+
+  test('destroy removes listeners', () => {
+    const onChange = vi.fn();
+    const onAction = vi.fn();
+    const k = new KeyboardInput(onChange, onAction);
+    k.destroy();
+    key('keydown', 'KeyD');
+    key('keydown', 'KeyE');
+    window.dispatchEvent(new Event('blur'));
+    expect(k.keys.right).toBe(false);
+    expect(onAction).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

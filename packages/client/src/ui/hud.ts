@@ -1,5 +1,5 @@
-import { MAP, zoneAt, type Intent, type MapData, type PlayerView, type RejectReason } from '@miljeong/shared';
-import { availableActions, type ActionName } from '../game/input';
+import { MAP, zoneAt, type GameConfig, type Intent, type MapData, type PlayerView, type RejectReason } from '@miljeong/shared';
+import { activeConfig, availableActions, type ActionName } from '../game/input';
 import { S } from '../strings';
 import { el } from './dom';
 import { openTask } from './openTask';
@@ -7,6 +7,7 @@ import { openTask } from './openTask';
 export interface HudDeps {
   send(intent: Intent): void;
   map?: MapData;
+  config?: GameConfig;
 }
 
 export interface Hud {
@@ -30,6 +31,7 @@ function secondsLeft(readyAt: number, now: number): number {
 
 export function createHud(parent: HTMLElement, deps: HudDeps): Hud {
   const map = deps.map ?? MAP;
+  const config = deps.config ?? activeConfig();
   let view: PlayerView | null = null;
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -65,12 +67,12 @@ export function createHud(parent: HTMLElement, deps: HudDeps): Hud {
   parent.append(root);
 
   function doFix(): void {
-    if (view && availableActions(view, map).fixBreaker) deps.send({ t: 'fixBreaker' });
+    if (view && availableActions(view, map, config).fixBreaker) deps.send({ t: 'fixBreaker' });
   }
 
   function trigger(action: ActionName): void {
     if (!view) return;
-    const a = availableActions(view, map);
+    const a = availableActions(view, map, config);
     switch (action) {
       case 'task':
         // E doubles as the breaker key for fighters during a blackout
@@ -113,7 +115,7 @@ export function createHud(parent: HTMLElement, deps: HudDeps): Hud {
   function update(v: PlayerView): void {
     view = v;
     const spy = v.me.role === 'spy';
-    const a = availableActions(v, map);
+    const a = availableActions(v, map, config);
     const pct = Math.round(v.gauge * 100);
     fill.style.width = `${pct}%`;
     gauge.setAttribute('aria-valuenow', String(pct));

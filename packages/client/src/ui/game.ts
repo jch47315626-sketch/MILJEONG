@@ -5,6 +5,7 @@ import { inputToDir, KeyboardInput, MoveSender } from '../game/input';
 import { newStore, pushView } from '../game/store';
 import { createHud, rejectText } from './hud';
 import { el } from './dom';
+import { S } from '../strings';
 import { showRoleReveal, takeReveal } from './roleReveal';
 import type { Vec } from '@miljeong/shared';
 
@@ -62,6 +63,8 @@ export function render(root: HTMLElement, ctx: ScreenCtx): () => void {
   void import('../game/GameScene').then((m) => {
     if (disposed) return;
     game = m.createGame(canvasHost, store);
+  }).catch(() => {
+    if (!disposed) canvasHost.replaceChildren(el('p', { class: 'error', 'data-testid': 'game-error' }, S.err.generic));
   });
 
   return () => {
