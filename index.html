@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>자모냥</title>
+  <meta name="description" content="한글 자음·모음으로 만드는 슬라이딩 블록 퍼즐" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=Jua&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- 타이틀 / 레벨 선택 -->
+    <section id="menu" class="screen">
+      <header class="title">
+        <h1>자모냥</h1>
+        <p>모음 블록을 밀어, 같은 소리 자음을 태워 글자를 완성하세요</p>
+      </header>
+      <div id="worlds"></div>
+      <details class="legend">
+        <summary>오음(五音) 색 규칙</summary>
+        <ul id="legendList"></ul>
+        <p class="small">세로 모음(ㅣㅏㅓㅑㅕ)은 위아래로, 가로 모음(ㅡㅗㅜㅛㅠ)은 좌우로만 움직입니다.</p>
+      </details>
+    </section>
+
+    <!-- 게임 화면 -->
+    <section id="game" class="screen hidden">
+      <div class="topbar">
+        <button id="backBtn" class="icon-btn" aria-label="레벨 선택으로">←</button>
+        <div class="level-title">
+          <span id="worldName"></span>
+          <strong id="levelName"></strong>
+        </div>
+        <button id="restartBtn" class="icon-btn" aria-label="다시 하기">↻</button>
+        <button id="soundBtn" class="icon-btn" aria-label="소리 켜기/끄기">🔊</button>
+      </div>
+      <div class="timer"><div id="timerFill"></div><span id="timerText"></span></div>
+      <div class="stats">
+        <span>점수 <b id="score">0</b></span>
+        <span>이동 <b id="moves">0</b></span>
+        <span id="hiddenBox"></span>
+        <span id="ruleBox"></span>
+      </div>
+      <div id="letters" class="letters" aria-live="polite"></div>
+      <div id="boardWrap">
+        <canvas id="board"></canvas>
+        <div id="palette" class="palette hidden"></div>
+        <div id="toast" class="toast"></div>
+      </div>
+      <p id="tip" class="tip"></p>
+      <div class="items" id="items"></div>
+    </section>
+
+    <!-- 결과 -->
+    <div id="overlay" class="overlay hidden">
+      <div class="card">
+        <h2 id="resultTitle"></h2>
+        <div id="resultStars" class="stars"></div>
+        <div id="resultBody"></div>
+        <div class="card-actions">
+          <button id="resultRetry" class="btn ghost">다시 하기</button>
+          <button id="resultNext" class="btn">다음 레벨</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/hangul.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/levels.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
