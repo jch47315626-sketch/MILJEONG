@@ -1,0 +1,9 @@
+{
+  "name": "miljeong",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "test": "npm test -ws --if-present",
+    "typecheck": "tsc -b packages/shared"
+  }
+}
